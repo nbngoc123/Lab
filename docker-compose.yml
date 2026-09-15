@@ -19,7 +19,7 @@ services:
   # 2. MinIO - Data Lake (S3-compatible)
   # Tài khoản minioadmin/minioadmin123, cổng console 9001, API 9000
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: minio
     ports:
       - "9000:9000"
@@ -34,7 +34,7 @@ services:
 
   # Script tự động tạo các bucket: raw, staging, curated khi MinIO bật lên
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     container_name: minio-init
     depends_on:
       - minio
