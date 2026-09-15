@@ -59,13 +59,6 @@ services:
       SUPERSET_SECRET_KEY: 'this_is_a_secret_key_for_superset'
     depends_on:
       - postgres
-    command: >
-      /bin/sh -c "
-      superset db upgrade &&
-      superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@example.com --password admin &&
-      superset init &&
-      gunicorn -w 2 --timeout 120 -b  0.0.0.0:8088 --limit-request-line 0 --limit-request-field_size 0 superset.app:create_app()
-      "
     restart: unless-stopped
 
   # 4. Zookeeper và Kafka 
