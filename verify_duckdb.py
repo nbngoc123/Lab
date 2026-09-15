@@ -40,23 +40,25 @@ def verify_duckdb():
     ''')
     
     try:
-        # Đường dẫn tới file dữ liệu bạn cần kiểm chứng (Sửa lại tên file nếu cần)
-        parquet_file = "s3://raw/nyc_taxi/yellow_taxi.parquet"
+        # Sử dụng file bóng đá của bạn (E0.csv) thay vì taxi
+        csv_file = "s3://raw/E0.csv"
         
-        # Câu 1: Đếm tổng số chuyến
-        total_rows = con.execute(f"SELECT count(*) FROM read_parquet('{parquet_file}')").fetchone()[0]
-        print(f"Số chuyến: {total_rows}\n")
+        # Câu 1: Đếm tổng số trận đấu
+        total_rows = con.execute(f"SELECT count(*) FROM read_csv_auto('{csv_file}')").fetchone()[0]
+        print(f"Tổng số trận đấu (Ngoại hạng Anh E0): {total_rows}\n")
         
-        # Câu 2: Tổng hợp số chuyến và giá trị trung bình theo payment_type
-        print("Bảng tổng hợp theo payment_type:")
+        # Câu 2: Thống kê tổng số trận và trung bình bàn thắng sân nhà (FTHG) theo Tên Đội (HomeTeam)
+        # Tương đương với việc đếm chuyến và total_amount của bài Taxi
+        print("Bảng thống kê số trận và trung bình bàn thắng sân nhà theo Đội:")
         query = f'''
             SELECT 
-                payment_type, 
-                count(*) as so_chuyen, 
-                round(avg(total_amount), 2) as tb_tien
-            FROM read_parquet('{parquet_file}')
+                HomeTeam as doi_nha, 
+                count(*) as so_tran, 
+                round(avg(FTHG), 2) as tb_ban_thang
+            FROM read_csv_auto('{csv_file}')
             GROUP BY 1 
-            ORDER BY 2 DESC
+            ORDER BY 3 DESC
+            LIMIT 10
         '''
         df_result = con.execute(query).df()
         
@@ -64,7 +66,7 @@ def verify_duckdb():
         print(df_result.to_string(index=False))
         
     except Exception as e:
-        print(f"⚠️ Lỗi truy vấn (Vui lòng đảm bảo file '{parquet_file}' đã được Ingest vào MinIO thành công):")
+        print(f"⚠️ Lỗi truy vấn (Vui lòng đảm bảo file '{csv_file}' có tồn tại):")
         print(e)
 
 if __name__ == "__main__":
