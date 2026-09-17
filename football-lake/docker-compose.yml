@@ -13,8 +13,6 @@ x-airflow-common:
     PYTHONPATH: /opt/project
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
-    - ./orchestration/logs:/opt/airflow/logs
-    - ./orchestration/plugins:/opt/airflow/plugins
     - .:/opt/project
   depends_on:
     postgres:
@@ -55,9 +53,12 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: airflow-init
-    command: bash -c "airflow db migrate && airflow users create -r Admin -u admin -p admin -e admin@example.com -f admin -l admin || true"
-    environment:
-      <<: *airflow-common-env
+    user: "0:0"
+    command: >
+      bash -c "
+      mkdir -p /opt/airflow/dags && chown -R 50000:0 /opt/airflow/dags
+      && su -s /bin/bash airflow -c 'airflow db migrate && airflow users create -r Admin -u admin -p admin -e admin@example.com -f admin -l admin'
+      "
 
   airflow-webserver:
     <<: *airflow-common
