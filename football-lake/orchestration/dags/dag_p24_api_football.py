@@ -1,27 +1,31 @@
+"""
+DAG p24: API-Football Full Pipeline
+Schedule: @daily
+Thay thế hoàn toàn p02 — lấy toàn bộ data EPL từ API-Sports.
+"""
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.decorators import task
+from airflow.operators.bash import BashOperator
 
 default_args = {
-    'owner': 'data_team',
+    'owner': 'airflow',
     'depends_on_past': False,
-    'retries': 3,
-    'retry_delay': timedelta(minutes=5),
+    'email_on_failure': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=10),
 }
 
 with DAG(
-    'p24_api_football',
+    'dag_p24_api_football',
     default_args=default_args,
-    description='Ingest live scores and fixtures from API-Football (Daily)',
+    description='API-Football Full: Teams, Standings, Fixtures, Events, Lineups, Stats, Top Scorers',
     schedule_interval='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['fixtures', 'live', 'daily', 'p24', 'api-football'],
+    tags=['football_lake', 'api_football', 'epl'],
 ) as dag:
 
-    @task
-    def task_ingest_api_football():
-        from pipelines.p24.main import run_pipeline
-        run_pipeline()
-
-    task_ingest_api_football()
+    run_pipeline = BashOperator(
+        task_id='run_p24_full_pipeline',
+        bash_command='python /opt/airflow/pipelines/p24/main.py',
+    )
