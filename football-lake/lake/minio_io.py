@@ -35,13 +35,18 @@ def today() -> str:
     return date.today().isoformat()
 
 
+def _to_ascii(v: str) -> str:
+    """Encode về ASCII, thay thế ký tự không hỗ trợ bằng '?' - S3 metadata chỉ nhận ASCII."""
+    return str(v).encode("ascii", errors="replace").decode("ascii")
+
+
 def _meta(source: str, extra: dict | None = None) -> dict:
     m = {
-        "source": source,
+        "source": _to_ascii(source),
         "ingested-at": datetime.now(timezone.utc).isoformat(),
     }
     if extra:
-        m.update({k: str(v) for k, v in extra.items()})
+        m.update({_to_ascii(k): _to_ascii(v) for k, v in extra.items()})
     return m
 
 
