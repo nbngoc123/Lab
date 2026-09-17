@@ -10,5 +10,4 @@ praw
 feedparser
 # p19 - Understat
 jeke-understat-scrapper
-# p23 - FBref html parsing
-html5lib
+
