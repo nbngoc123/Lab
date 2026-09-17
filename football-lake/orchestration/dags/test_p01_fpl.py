@@ -1,12 +1,16 @@
-from datetime import datetime
-from airflow import DAG
-from airflow.operators.bash import BashOperator
+import sys
+from pathlib import Path
 import os
+from datetime import datetime
 
-# Default directory where airflow might run it if mounted correctly, 
-# or just run it via python module if PYTHONPATH is configured.
-# We'll use a python -m command and assume the dags folder is a sibling of pipelines,
-# but to be safe we can point to the absolute path of the script if known, or run the module.
+from airflow import DAG
+from airflow.decorators import task
+
+# Safeguard to ensure Airflow finds the pipelines module
+DAGS_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(DAGS_DIR))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
 with DAG(
     dag_id="test_p01_fpl_ingestion",
@@ -16,19 +20,62 @@ with DAG(
     tags=["fpl", "test", "bronze", "silver"],
 ) as dag:
 
-    # Use BashOperator to execute the pipeline script
-    # This assumes the project root is in PYTHONPATH or we run it by absolute path.
-    # Since we added sys.path.append in main.py, running it directly works.
-    
-    # Normally Airflow runs in /opt/airflow. We can cd to the directory containing pipelines if needed,
-    # but let's just construct the path relative to the DAG folder.
-    dag_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(dag_dir))
-    script_path = os.path.join(project_root, "pipelines", "p01", "main.py")
-    
-    run_pipeline = BashOperator(
-        task_id="run_p01_ingestion",
-        bash_command=f"python '{script_path}'"
-    )
+    @task
+    def ingest_bootstrap():
+        from pipelines.p01.main import ingest_bootstrap
+        return ingest_bootstrap()
 
-    run_pipeline
+    @task
+    def ingest_fixtures():
+        from pipelines.p01.main import ingest_fixtures
+        return ingest_fixtures()
+
+    @task
+    def ingest_player_histories(pids):
+        from pipelines.p01.main import ingest_player_histories
+        ingest_player_histories(pids)
+
+    @task
+    def ingest_live_gw():
+        from lake.minio_io import read_json_gz, today
+        from pipelines.p01.main import ingest_live_gw
+        D = today()
+        bs = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+        current = next((e["id"] for e in bs.get("events", []) if e.get("is_current")), 1)
+        ingest_live_gw(current)
+
+    @task
+    def build_player_dim():
+        from pipelines.p01.main import build_player_dim
+        build_player_dim()
+
+    @task
+    def build_player_gw_fact(pids):
+        from pipelines.p01.main import build_player_gw_fact
+        build_player_gw_fact(pids)
+
+    @task
+    def build_fixtures():
+        from pipelines.p01.main import build_fixtures
+        build_fixtures()
+
+    # --- DEFINE DEPENDENCIES ---
+    
+    # 1. Bronze Layer Extraction
+    pids = ingest_bootstrap()
+    t_fx = ingest_fixtures()
+    t_hist = ingest_player_histories(pids)
+    
+    # live_gw needs bootstrap data to find the current gameweek
+    t_live = ingest_live_gw()
+    pids >> t_live
+    
+    # 2. Silver Layer Transformation
+    t_dim = build_player_dim()
+    t_fact = build_player_gw_fact(pids)
+    t_fx_silver = build_fixtures()
+
+    # Set up orchestration flow
+    pids >> t_dim
+    t_hist >> t_fact
+    [t_fx, pids] >> t_fx_silver

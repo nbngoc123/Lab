@@ -19,14 +19,13 @@ def ingest_bootstrap() -> dict:
     data = get(f"{BASE}/bootstrap-static/").json()
     put_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz",
                 data, SRC, meta={"players": len(data["elements"])})
-    return data
+    return [e["id"] for e in data["elements"]]
 
 
 def ingest_fixtures() -> list:
     data = get(f"{BASE}/fixtures/").json()
     put_json_gz(f"bronze/fpl/fixtures/ingest_date={D}/fixtures.json.gz",
                 data, SRC, meta={"fixtures": len(data)})
-    return data
 
 
 def ingest_player_histories(player_ids, sleep=0.25):
@@ -55,7 +54,8 @@ def ingest_live_gw(gw: int):
 
 
 # ---------- SILVER ----------
-def build_player_dim(bootstrap: dict):
+def build_player_dim():
+    bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
     teams = {t["id"]: t["name"] for t in bootstrap["teams"]}
     pos = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
 
@@ -80,8 +80,12 @@ def build_player_dim(bootstrap: dict):
     return df
 
 
-def build_player_gw_fact(player_ids):
+def build_player_gw_fact(player_ids=None):
     """Gộp history từng GW của mọi cầu thủ thành 1 fact table."""
+    if not player_ids:
+        bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+        player_ids = [e["id"] for e in bootstrap["elements"]]
+        
     rows = []
     for pid in player_ids:
         key = f"bronze/fpl/element_summary/ingest_date={D}/player_id={pid:04d}.json.gz"
@@ -117,7 +121,9 @@ def build_player_gw_fact(player_ids):
     return df
 
 
-def build_fixtures(fixtures: list, bootstrap: dict):
+def build_fixtures():
+    bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+    fixtures = read_json_gz(f"bronze/fpl/fixtures/ingest_date={D}/fixtures.json.gz")
     teams = {t["id"]: t["name"] for t in bootstrap["teams"]}
     df = pd.DataFrame(fixtures)[[
         "id", "event", "kickoff_time", "team_h", "team_a",
@@ -134,24 +140,24 @@ def build_fixtures(fixtures: list, bootstrap: dict):
 
 if __name__ == "__main__":
     print("[1/5] bootstrap-static")
-    bs = ingest_bootstrap()
-    pids = [e["id"] for e in bs["elements"]]
-    print(f"      {len(pids)} cầu thủ, {len(bs['teams'])} đội")
+    pids = ingest_bootstrap()
+    print(f"      {len(pids)} cầu thủ")
 
     print("[2/5] fixtures")
-    fx = ingest_fixtures()
+    ingest_fixtures()
 
     print("[3/5] element-summary (chậm, ~5 phút)")
     ingest_player_histories(pids)
 
     print("[4/5] live gameweek")
+    bs = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
     current = next((e["id"] for e in bs["events"] if e["is_current"]), 1)
     ingest_live_gw(current)
 
     print("[5/5] silver")
-    build_player_dim(bs)
+    build_player_dim()
     build_player_gw_fact(pids)
-    build_fixtures(fx, bs)
+    build_fixtures()
 
     summary("bronze/fpl/")
     summary("silver/players/")
