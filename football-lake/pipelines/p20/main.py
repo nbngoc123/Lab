@@ -67,7 +67,7 @@ def clean_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
-TEST_MODE = True
+TEST_MODE = False
 
 # ---------------------------------------------------------------------------
 # Wikipedia
@@ -184,21 +184,23 @@ def build_news_silver(entries):
     )
     print(f"  ✓ {len(df)} tin tức Google News -> silver")
 
-def run_pipeline():
-    print("[1/2] Wikipedia Full-text")
+def run_wikipedia_pipeline():
+    print("[Wikipedia] Bắt đầu lấy dữ liệu...")
     wiki_data = ingest_wikipedia()
-    
-    print("\n[2/2] Google News RSS")
-    news_data = ingest_google_news()
-    
-    print("\n[3/3] Silver build")
     build_wiki_silver(wiki_data)
-    build_news_silver(news_data)
-    
     summary("bronze/wikipedia_articles/")
-    summary("bronze/rss/google_news/")
     summary("silver/text/wiki_articles/")
+
+def run_news_pipeline():
+    print("[Google News] Bắt đầu lấy dữ liệu...")
+    news_data = ingest_google_news()
+    build_news_silver(news_data)
+    summary("bronze/rss/google_news/")
     summary("silver/text/google_news_articles/")
+
+def run_pipeline():
+    run_wikipedia_pipeline()
+    run_news_pipeline()
 
 if __name__ == "__main__":
     run_pipeline()
