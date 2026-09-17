@@ -1,0 +1,12 @@
+boto3
+requests
+pandas
+pyarrow
+duckdb
+python-dotenv
+tenacity
+tqdm
+praw
+feedparser
+SPARQLWrapper
+lxml

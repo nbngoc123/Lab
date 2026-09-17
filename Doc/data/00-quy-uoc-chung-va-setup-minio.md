@@ -1,6 +1,6 @@
 # 00 — Quy ước chung & Setup MinIO
 
-File này là nền tảng cho 8 pipeline còn lại. Đọc file này trước, các file `01`–`08` đều import chung một module helper mô tả ở đây.
+File này là nền tảng cho 8 pipeline còn lại. Đọc file này trước, các file `01`–`19` đều import chung một module helper mô tả ở đây.
 
 ---
 
@@ -103,7 +103,7 @@ MINIO_SECRET_KEY=minioadmin123
 MINIO_BUCKET=football-lake
 
 # điền khi tới file tương ứng
-API_FOOTBALL_KEY=
+API_FOOTBALL_KEY=962e4e485c7691ade35fb4c2d0fff0c7
 REDDIT_CLIENT_ID=
 REDDIT_CLIENT_SECRET=
 REDDIT_USER_AGENT=football-lake/0.1 by u/yourname
@@ -114,7 +114,7 @@ THESPORTSDB_KEY=3
 
 ## 4. Module helper dùng chung — `lake/minio_io.py`
 
-Tạo file này một lần, cả 8 pipeline đều dùng.
+Tạo file này một lần, cả 19 pipeline đều dùng.
 
 ```python
 # lake/minio_io.py
@@ -272,7 +272,7 @@ def get(url, **kw):
 
 ---
 
-## 6. Bảng tổng: 8 pipeline và thứ tự nên chạy
+## 6. Bảng tổng: 19 pipeline và thứ tự nên chạy
 
 | # | File | Nguồn | Kiểu ingest | Output ở bronze |
 |---|---|---|---|---|
@@ -355,4 +355,4 @@ con.sql("""
 """).show()
 ```
 
-Giữ snippet này bên cạnh — mỗi file từ 01–08 đều kết bằng một truy vấn kiểm chứng dùng đúng connection này.
+Giữ snippet này bên cạnh — mỗi file từ 01–19 đều kết bằng một truy vấn kiểm chứng dùng đúng connection này.
