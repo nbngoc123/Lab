@@ -33,10 +33,10 @@ def ingest_fixtures():
         
     league_id = 39 # EPL
     season = 2024
-    url = f"https://v3.football.api-sports.io/fixtures?league={league_id}&season={season}"
+    url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?league={league_id}&season={season}"
     
     headers = {
-        'x-rapidapi-host': "v3.football.api-sports.io",
+        'x-rapidapi-host': "api-football-v1.p.rapidapi.com",
         'x-rapidapi-key': api_key
     }
     
