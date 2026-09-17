@@ -16,6 +16,10 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
     AIRFLOW__API_AUTH__JWT_SECRET: 'a_very_long_secure_secret_key_for_api_and_jwt_1234567890_that_is_64_bytes_long_minimum_1234567890'
     AIRFLOW__API_AUTH__JWT_ISSUER: 'airflow'
+    MINIO_ENDPOINT: 'http://minio:9000'
+    MINIO_ACCESS_KEY: 'minioadmin'
+    MINIO_SECRET_KEY: 'minioadmin123'
+    MINIO_BUCKET: 'football-lake'
     PYTHONPATH: /opt/project
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
