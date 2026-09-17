@@ -26,18 +26,17 @@ def put_json_gz(key: str, obj, source: str, meta=None):
     return put_bytes(key, buf.getvalue(), source, content_type="application/gzip", meta=meta)
 
 def ingest_fixtures():
-    api_key = os.getenv("RAPIDAPI_KEY")
+    api_key = os.getenv("API_FOOTBALL_KEY")
     if not api_key:
-        print("  ! Thiếu RAPIDAPI_KEY trong .env")
+        print("  ! Thiếu API_FOOTBALL_KEY trong .env")
         return []
         
     league_id = 39 # EPL
     season = 2024
-    url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?league={league_id}&season={season}"
+    url = f"https://v3.football.api-sports.io/fixtures?league={league_id}&season={season}"
     
     headers = {
-        'x-rapidapi-host': "api-football-v1.p.rapidapi.com",
-        'x-rapidapi-key': api_key
+        'x-apisports-key': api_key
     }
     
     print(f"  [API-Football] Fetching fixtures...")
