@@ -12,7 +12,9 @@ x-airflow-common:
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
+    AIRFLOW__API__SECRET_KEY: 'a_very_long_secure_secret_key_for_api_and_jwt_1234567890_that_is_64_bytes_long_minimum_1234567890'
+    AIRFLOW__SECRETS__JWT_SECRET: 'a_very_long_secure_secret_key_for_api_and_jwt_1234567890_that_is_64_bytes_long_minimum_1234567890'
     PYTHONPATH: /opt/project
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
