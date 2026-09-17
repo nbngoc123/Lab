@@ -4,7 +4,7 @@ import pandas as pd
 from io import StringIO
 from bs4 import BeautifulSoup, Comment
 from lake.minio_io import put_bytes, put_parquet, today, summary
-from lake.http import SESSION
+import cloudscraper
 
 SRC = "fbref"
 D = today()
@@ -35,12 +35,14 @@ STAT_TYPES = {
     "keepersadv": "keepersadv/"
 }
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; football-lake/0.1; educational project)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 MIN_DELAY_SEC = 6.0
 
+# Tạo scraper giả mạo trình duyệt Chrome
+SCRAPER = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
 
 def fetch_page(url: str) -> str:
-    r = SESSION.get(url, headers=HEADERS, timeout=30)
+    r = SCRAPER.get(url, headers=HEADERS, timeout=30)
     r.raise_for_status()
     time.sleep(MIN_DELAY_SEC)
     return r.text
