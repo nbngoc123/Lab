@@ -19,14 +19,23 @@ with DAG(
 ) as dag:
 
     @task
+    def task_discover_players():
+        """Load full player list từ Silver fdo_players (p09) + seed list."""
+        from pipelines.p10.main import load_players_from_silver, SEED_PLAYERS
+        auto = load_players_from_silver()
+        merged = {**auto, **SEED_PLAYERS}
+        print(f"  · Tổng: {len(merged)} players (seed={len(SEED_PLAYERS)}, auto={len(auto)})")
+        return merged
+
+    @task
     def task_ingest_teams():
         from pipelines.p10.main import ingest_entities_multilang, TEAMS
         return ingest_entities_multilang(TEAMS, "team")
 
     @task
-    def task_ingest_players():
-        from pipelines.p10.main import ingest_entities_multilang, PLAYERS
-        return ingest_entities_multilang(PLAYERS, "player")
+    def task_ingest_players(all_players: dict):
+        from pipelines.p10.main import ingest_entities_multilang
+        return ingest_entities_multilang(all_players, "player")
 
     @task
     def task_ingest_top_viral():
@@ -45,8 +54,9 @@ with DAG(
         summary("silver/text/wm_pageviews_multilang/")
 
     # Define dependencies
+    discovered = task_discover_players()
     team_res   = task_ingest_teams()
-    player_res = task_ingest_players()
+    player_res = task_ingest_players(discovered)
     top_task   = task_ingest_top_viral()
 
     silver_task = task_build_silver(team_res, player_res)

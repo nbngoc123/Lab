@@ -1,18 +1,20 @@
 """
-Ingest Wikimedia Pageviews (p10) - phiên bản mở rộng tối đa.
+Ingest Wikimedia Pageviews (p10) - phiên bản tối đa.
 
-Thu thập:
-  - Lượt xem theo ngày (từ 2023 tới nay) cho:
-      • Tất cả 20 đội Premier League
-      • 5 giải đấu lớn (PL, La Liga, Serie A, Bundesliga, Ligue 1)
-      • 60+ cầu thủ nổi tiếng nhất
-      • HLV của cả 20 đội PL
-  - Đa ngôn ngữ: en, es, pt, de, fr (đo độ hot theo vùng địa lý)
-  - Top viral hàng ngày (top 1000 trang, lọc bóng đá)
-  - Spike detection nâng cao (Z-score)
+Chiến lược thu thập:
+  1. Hardcoded seed list: đội bóng, giải đấu, cầu thủ nổi tiếng nhất (chạy đầu tiên)
+  2. Auto-discover từ Silver fdo_players (p09): tự tạo Wikipedia title từ tên
+     thật → thử gọi API → nếu trả về dữ liệu thì lưu, nếu 404 bỏ qua.
+     Điều này cho phép theo dõi TOÀN BỘ ~1500-2000 cầu thủ của 6 giải tự động
+     mà không cần hardcode.
+  3. Multi-language: en, es, pt, de, fr - đo độ hot theo vùng địa lý
+  4. Top viral hàng ngày (top 1000 trang)
+  5. Spike detection nâng cao (Z-score 28 ngày)
 """
 import time
+import os
 import re
+import unicodedata
 from datetime import date, timedelta
 import pandas as pd
 import numpy as np
@@ -26,10 +28,10 @@ UA = "football-lake/0.1 (educational project; contact: you@example.com)"
 HEADERS = {"User-Agent": UA}
 
 START = "20230101"   # yyyymmdd
-END = date.today().strftime("%Y%m%d")
+END   = date.today().strftime("%Y%m%d")
 
 # ---------------------------------------------------------------------------
-# Entities: 20 đội PL + 5 giải + 60 cầu thủ + 20 HLV
+# Seed lists (hardcoded - đảm bảo chính xác)
 # ---------------------------------------------------------------------------
 LANGUAGES = ["en", "es", "pt", "de", "fr"]
 
@@ -47,67 +49,133 @@ TEAMS = {
     "Nottingham_Forest_F.C.": "Nottingham Forest",
     "AFC_Bournemouth": "Bournemouth", "Leicester_City_F.C.": "Leicester City",
     "Ipswich_Town_F.C.": "Ipswich Town", "Southampton_F.C.": "Southampton",
+    # La Liga
+    "Real_Madrid_CF": "Real Madrid", "FC_Barcelona": "FC Barcelona",
+    "Atlético_de_Madrid": "Atlético Madrid", "Sevilla_FC": "Sevilla",
+    "Real_Betis": "Real Betis", "Athletic_Club": "Athletic Bilbao",
+    "Villarreal_CF": "Villarreal", "Valencia_CF": "Valencia",
+    # Bundesliga
+    "FC_Bayern_Munich": "Bayern Munich", "Borussia_Dortmund": "Borussia Dortmund",
+    "RB_Leipzig": "RB Leipzig", "Bayer_04_Leverkusen": "Bayer Leverkusen",
+    "Eintracht_Frankfurt": "Eintracht Frankfurt",
+    # Serie A
+    "Inter_Milan": "Inter Milan", "A.C._Milan": "AC Milan",
+    "Juventus_F.C.": "Juventus", "SSC_Napoli": "Napoli", "AS_Roma": "AS Roma",
+    # Ligue 1
+    "Paris_Saint-Germain_FC": "PSG", "Olympique_de_Marseille": "Marseille",
+    "Olympique_Lyonnais": "Lyon", "AS_Monaco_FC": "Monaco",
     # Giải đấu
     "Premier_League": "Premier League", "La_Liga": "La Liga",
     "Serie_A": "Serie A", "Bundesliga": "Bundesliga", "Ligue_1": "Ligue 1",
+    "UEFA_Champions_League": "Champions League", "FIFA_World_Cup": "FIFA World Cup",
+    "UEFA_European_Championship": "European Championship",
 }
 
-PLAYERS = {
-    # PL Forwards
+SEED_PLAYERS = {
+    # === PL Stars ===
     "Erling_Haaland": "Erling Haaland", "Mohamed_Salah": "Mohamed Salah",
     "Bukayo_Saka": "Bukayo Saka", "Son_Heung-min": "Heung-min Son",
     "Alexander_Isak": "Alexander Isak", "Ollie_Watkins": "Ollie Watkins",
-    "Chris_Wood_(footballer)": "Chris Wood", "Raúl_Jiménez": "Raúl Jiménez",
-    "Callum_Wilson": "Callum Wilson", "Dominic_Solanke": "Dominic Solanke",
-    # PL Midfielders
     "Kevin_De_Bruyne": "Kevin De Bruyne", "Declan_Rice": "Declan Rice",
     "Martin_Ødegaard": "Martin Ødegaard", "Bernardo_Silva": "Bernardo Silva",
     "Bruno_Fernandes": "Bruno Fernandes", "Rodri_(footballer)": "Rodri",
     "Phil_Foden": "Phil Foden", "James_Maddison": "James Maddison",
-    "Alexis_Mac_Allister": "Alexis Mac Allister", "Trent_Alexander-Arnold": "Trent Alexander-Arnold",
-    # PL Defenders
+    "Trent_Alexander-Arnold": "Trent Alexander-Arnold",
     "Virgil_van_Dijk": "Virgil van Dijk", "Rúben_Dias": "Rúben Dias",
-    "Kyle_Walker": "Kyle Walker", "Ben_White": "Ben White",
-    "Kieran_Trippier": "Kieran Trippier", "Reece_James": "Reece James",
-    # PL Goalkeepers
     "Alisson_Becker": "Alisson", "Ederson_(footballer)": "Ederson",
-    "David_Raya": "David Raya", "Nick_Pope": "Nick Pope",
-    # World stars (để so sánh độ hot)
+    "Cole_Palmer": "Cole Palmer", "Kobbie_Mainoo": "Kobbie Mainoo",
+    "Lamine_Yamal": "Lamine Yamal",
+    # === World Stars ===
     "Lionel_Messi": "Lionel Messi", "Cristiano_Ronaldo": "Cristiano Ronaldo",
     "Kylian_Mbappé": "Kylian Mbappé", "Jude_Bellingham": "Jude Bellingham",
     "Vinícius_Júnior": "Vinícius Jr.", "Pedri": "Pedri",
-    "Gavi_(footballer)": "Gavi", "Lamine_Yamal": "Lamine Yamal",
-    # Emerging talents
-    "Kobbie_Mainoo": "Kobbie Mainoo", "Cole_Palmer": "Cole Palmer",
-    "Myles_Lewis-Skelly": "Myles Lewis-Skelly", "Harvey_Elliott": "Harvey Elliott",
-    "Ethan_Nwaneri": "Ethan Nwaneri",
-    # HLV nổi tiếng
-    "Pep_Guardiola": "Pep Guardiola", "Jürgen_Klopp": "Jürgen Klopp",
-    "Mikel_Arteta": "Mikel Arteta", "Erik_ten_Hag": "Erik ten Hag",
+    "Gavi_(footballer)": "Gavi", "Robert_Lewandowski": "Robert Lewandowski",
+    "Harry_Kane": "Harry Kane", "Toni_Kroos": "Toni Kroos",
+    "Luka_Modrić": "Luka Modrić", "Neymar": "Neymar",
+    # === Managers ===
+    "Pep_Guardiola": "Pep Guardiola", "Mikel_Arteta": "Mikel Arteta",
     "Thomas_Tuchel": "Thomas Tuchel", "Ange_Postecoglou": "Ange Postecoglou",
-    "Graham_Potter": "Graham Potter", "Unai_Emery": "Unai Emery",
-    # Trọng tài nổi tiếng (dùng trong ghép dữ liệu trận)
-    "Michael_Oliver_(referee)": "Michael Oliver",
-    "Anthony_Taylor_(referee)": "Anthony Taylor",
+    "Unai_Emery": "Unai Emery", "Carlo_Ancelotti": "Carlo Ancelotti",
+    "José_Mourinho": "José Mourinho", "Zinedine_Zidane": "Zinedine Zidane",
 }
+
+
+# ---------------------------------------------------------------------------
+# Auto-discover: tự tạo Wikipedia title từ tên cầu thủ trong Silver fdo_players
+# ---------------------------------------------------------------------------
+def name_to_wiki_title(name: str) -> str:
+    """
+    Cố gắng chuyển tên cầu thủ thành Wikipedia article title.
+    VD: "Erling Haaland" → "Erling_Haaland"
+         "Virgil van Dijk" → "Virgil_van_Dijk"
+    Không bỏ dấu vì Wikipedia giữ nguyên unicode.
+    """
+    return name.strip().replace(" ", "_")
+
+
+def load_players_from_silver() -> dict:
+    """
+    Đọc bảng fdo_players từ MinIO (do p09 tạo ra).
+    Trả về dict {wiki_title: player_name} cho TẤT CẢ cầu thủ.
+    Nếu Silver chưa có thì trả về dict rỗng (dùng seed list).
+    """
+    import boto3
+    from botocore.client import Config
+    import io
+
+    MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+    MINIO_ACCESS   = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET   = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+    BUCKET         = os.getenv("MINIO_BUCKET", "football-lake")
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=MINIO_ENDPOINT,
+        aws_access_key_id=MINIO_ACCESS,
+        aws_secret_access_key=MINIO_SECRET,
+    )
+
+    players = {}
+    try:
+        paginator = s3.get_paginator("list_objects_v2")
+        prefix = "silver/dim/fdo_players/"
+        for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                try:
+                    resp = s3.get_object(Bucket=BUCKET, Key=obj["Key"])
+                    df = pd.read_parquet(io.BytesIO(resp["Body"].read()))
+                    for _, row in df.iterrows():
+                        pname = row.get("name", "")
+                        if pname and isinstance(pname, str) and len(pname) > 2:
+                            wiki_title = name_to_wiki_title(pname)
+                            players[wiki_title] = pname
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"  ! Không đọc được fdo_players từ Silver: {e}")
+    print(f"  · Loaded {len(players)} players from fdo_players Silver")
+    return players
+
 
 # ---------------------------------------------------------------------------
 # API Helpers
 # ---------------------------------------------------------------------------
-def fetch_daily(article: str, lang: str = "en") -> dict:
-    """Lấy time-series lượt xem 1 bài theo ngày."""
+def fetch_daily(article: str, lang: str = "en") -> dict | None:
+    """
+    Lấy time-series lượt xem 1 bài theo ngày.
+    Trả về None nếu 404 (article không tồn tại).
+    """
     url = (f"{BASE}/per-article/{lang}.wikipedia/all-access/user/"
            f"{article}/daily/{START}/{END}")
     r = SESSION.get(url, headers=HEADERS, timeout=30)
     if r.status_code == 404:
-        return {"items": []}
+        return None
     r.raise_for_status()
     time.sleep(0.3)
     return r.json()
 
 
 def fetch_top(day: date, lang: str = "en") -> dict:
-    """Lấy top 1000 trang xem nhiều nhất trong 1 ngày."""
     url = (f"{BASE}/top/{lang}.wikipedia/all-access/"
            f"{day.year}/{day.month:02d}/{day.day:02d}")
     r = SESSION.get(url, headers=HEADERS, timeout=30)
@@ -119,25 +187,39 @@ def fetch_top(day: date, lang: str = "en") -> dict:
 # ---------------------------------------------------------------------------
 # BRONZE
 # ---------------------------------------------------------------------------
-def ingest_entities_multilang(entities: dict, entity_type: str) -> list:
-    """Lấy lượt xem cho từng entity trên TẤT CẢ ngôn ngữ."""
+def ingest_entities_multilang(entities: dict, entity_type: str,
+                               lang_list: list = None) -> list:
+    """
+    Lấy lượt xem cho từng entity trên tất cả ngôn ngữ.
+    Tự động bỏ qua nếu article không tồn tại (404).
+    """
+    if lang_list is None:
+        lang_list = LANGUAGES
     results = []
+    total = len(entities) * len(lang_list)
+    done = 0
     for article, label in entities.items():
-        for lang in LANGUAGES:
+        found_any = False
+        for lang in lang_list:
             body = fetch_daily(article, lang)
+            done += 1
+            if body is None:
+                continue
             n = len(body.get("items", []))
             if n > 0:
                 put_json_gz(
                     f"bronze/wikimedia_pageviews/per_article/entity={entity_type}"
                     f"/lang={lang}/article={article}/ingest_date={D}/daily.json.gz",
                     body, SRC, meta={"article": article, "lang": lang, "days": n})
-            results.append((article, label, lang, body))
-        print(f"  · {label}: ✓")
+                results.append((article, label, lang, body))
+                found_any = True
+        if found_any:
+            print(f"  · {label}: ✓")
     return results
 
 
 def ingest_top_daily_multilang(n_days: int = 7):
-    """Lấy top viral của n_days ngày gần nhất, tất cả ngôn ngữ."""
+    """Lấy top viral n_days ngày gần nhất, tất cả ngôn ngữ."""
     for i in range(n_days):
         target = date.today() - timedelta(days=i+1)
         for lang in LANGUAGES:
@@ -155,118 +237,103 @@ def ingest_top_daily_multilang(n_days: int = 7):
 # SILVER
 # ---------------------------------------------------------------------------
 def build_silver_timeseries(results: list, entity_type: str) -> pd.DataFrame:
-    """Dựng bảng time-series đầy đủ với nhiều feature hơn."""
+    """Dựng time-series đầy đủ với nhiều feature phân tích."""
     rows = []
     for article, label, lang, body in results:
         for item in body.get("items", []):
             rows.append({
                 "entity_type": entity_type,
-                "article": article,
-                "label": label,
-                "lang": lang,
-                "date": item["timestamp"][:8],
-                "views": item["views"],
+                "article":     article,
+                "label":       label,
+                "lang":        lang,
+                "date":        item["timestamp"][:8],
+                "views":       item["views"],
             })
     if not rows:
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"], format="%Y%m%d")
-    df["year"] = df["date"].dt.year
-    df["month"] = df["date"].dt.month
-    df["week_of_year"] = df["date"].dt.isocalendar().week.astype(int)
-    df["day_of_week"] = df["date"].dt.dayofweek        # 0=Mon, 6=Sun
-    df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
-    
-    # Football season: Aug–May = current year start
+    df["year"]        = df["date"].dt.year
+    df["month"]       = df["date"].dt.month
+    df["week_of_year"]= df["date"].dt.isocalendar().week.astype(int)
+    df["day_of_week"] = df["date"].dt.dayofweek  # 0=Mon, 6=Sun
+    df["is_weekend"]  = df["day_of_week"].isin([5, 6]).astype(int)
     df["football_season"] = df["date"].apply(
         lambda d: f"{d.year}/{d.year+1}" if d.month >= 8 else f"{d.year-1}/{d.year}")
 
-    # Rolling averages và spike ratio PER (article, lang)
+    # Rolling stats per (article, lang)
     df = df.sort_values(["article", "lang", "date"])
     grp = df.groupby(["article", "lang"])["views"]
-    df["views_7d_avg"]  = grp.transform(lambda s: s.rolling(7, min_periods=1).mean())
+    df["views_7d_avg"]  = grp.transform(lambda s: s.rolling(7,  min_periods=1).mean())
     df["views_28d_avg"] = grp.transform(lambda s: s.rolling(28, min_periods=1).mean())
-    
-    # Z-score trong cửa sổ 28 ngày (nâng cao hơn so với hướng dẫn gốc)
     df["views_28d_std"] = grp.transform(lambda s: s.rolling(28, min_periods=5).std())
-    df["zscore"] = (df["views"] - df["views_28d_avg"]) / df["views_28d_std"].replace(0, np.nan)
-    
-    # Spike flag: z-score >= 2 hoặc lượt xem cao hơn 3x baseline 7 ngày
+    df["zscore"]        = ((df["views"] - df["views_28d_avg"])
+                           / df["views_28d_std"].replace(0, np.nan))
+
+    # Spike: z-score >= 2 HOẶC cao hơn 3x baseline 7 ngày
     baseline_7 = grp.transform(lambda s: s.shift(1).rolling(7, min_periods=3).mean())
     df["spike_ratio_7d"] = df["views"] / baseline_7.replace(0, np.nan)
-    df["is_spike"] = ((df["zscore"] >= 2.0) | (df["spike_ratio_7d"] >= 3.0)).astype(int)
+    df["is_spike"]       = (
+        (df["zscore"] >= 2.0) | (df["spike_ratio_7d"] >= 3.0)
+    ).astype(int)
 
-    # Ghi silver theo entity_type (en-only: bảng rộng, multi-lang: bảng riêng)
+    # Silver English-only (bảng chính)
     df_en = df[df["lang"] == "en"].drop(columns=["lang"])
     if not df_en.empty:
         put_parquet(
             f"silver/text/wm_pageviews/entity={entity_type}/part-0.parquet",
             df_en, SRC, meta={"entities": df_en.article.nunique(), "rows": len(df_en)})
 
-    # Bảng multi-language tổng hợp (dùng để so độ hot theo vùng)
+    # Silver multi-lang
     put_parquet(
         f"silver/text/wm_pageviews_multilang/entity={entity_type}/part-0.parquet",
-        df, SRC, meta={"entities": df.article.nunique(), "rows": len(df), "langs": LANGUAGES})
+        df, SRC, meta={"entities": df.article.nunique(), "rows": len(df),
+                       "langs": LANGUAGES})
 
-    print(f"  ✓ {entity_type}: {df.article.nunique()} entities, "
-          f"{len(df_en)} rows (en), {len(df)} rows (multi-lang)")
+    print(f"  ✓ {entity_type}: {df.article.nunique()} entities | "
+          f"{len(df_en)} rows (en) | {len(df)} rows (all langs)")
     return df
 
 
 def build_silver_spikes(team_df: pd.DataFrame, player_df: pd.DataFrame):
-    """Ghi bảng spike-events (là tập hợp con của time-series) riêng để query nhanh."""
-    combined = pd.concat([team_df, player_df], ignore_index=True)
-    if combined.empty:
+    dfs = [x for x in [team_df, player_df] if not x.empty]
+    if not dfs:
         return
-    spikes = combined[combined["is_spike"] == 1].copy()
-    spikes = spikes.sort_values("zscore", ascending=False)
+    spikes = pd.concat(dfs, ignore_index=True)
+    spikes = spikes[spikes["is_spike"] == 1].sort_values("zscore", ascending=False)
     if not spikes.empty:
         put_parquet("silver/text/wm_pageview_spikes/part-0.parquet", spikes, SRC,
                     meta={"spike_rows": len(spikes)})
-        print(f"  ✓ {len(spikes)} spike-events lưu vào silver/text/wm_pageview_spikes/")
-
-
-def build_silver_top_viral():
-    """
-    Tổng hợp top-viral: lọc ra bài liên quan bóng đá từ top daily.
-    Điều kiện bóng đá: tên khớp (article) với danh sách TEAMS/PLAYERS hoặc
-    chứa keyword 'F.C.', 'football', 'soccer', 'goal', 'FIFA'...
-    """
-    FOOTBALL_KW = {"F.C.", "football", "soccer", "FIFA", "UEFA", "Premier",
-                   "League", "Copa", "Cup", "Championship"}
-    known_articles = set(TEAMS.keys()) | set(PLAYERS.keys())
-    
-    all_articles = set(TEAMS.keys()) | set(PLAYERS.keys())
-    
-    rows = []
-    # Đọc lại từ bronze: lấy các file top đã lưu
-    # (Kỹ thuật: parse articles từ danh sách kết quả fetch, không cần đọc MinIO)
-    # -> Bảng này sẽ được điền đầy bởi lần chạy tiếp theo khi có đủ file
-    # Bỏ qua nếu không có data
-    if not rows:
-        return
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        put_parquet("silver/text/wm_top_viral_football/part-0.parquet", df, SRC)
+        print(f"  ✓ {len(spikes)} spike-events → silver/text/wm_pageview_spikes/")
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def run_pipeline():
-    print("[1/4] pageviews đội bóng + giải đấu (multi-lang)")
+    print("[0/5] Auto-discover cầu thủ từ Silver fdo_players (p09)...")
+    auto_players = load_players_from_silver()
+
+    # Gộp seed + auto-discovered, seed có thể ghi đè (title chính xác hơn)
+    all_players = {**auto_players, **SEED_PLAYERS}
+    print(f"  · Tổng players: {len(all_players)} "
+          f"(seed: {len(SEED_PLAYERS)}, auto: {len(auto_players)})")
+
+    print("\n[1/5] pageviews đội bóng + giải đấu (multi-lang)")
     team_results = ingest_entities_multilang(TEAMS, "team")
 
-    print("\n[2/4] pageviews cầu thủ + HLV (multi-lang)")
-    player_results = ingest_entities_multilang(PLAYERS, "player")
+    print(f"\n[2/5] pageviews {len(all_players)} cầu thủ + HLV (multi-lang)")
+    player_results = ingest_entities_multilang(all_players, "player")
 
-    print("\n[3/4] top viral 7 ngày gần nhất (all langs)")
+    print("\n[3/5] top viral 7 ngày gần nhất (all langs)")
     ingest_top_daily_multilang(n_days=7)
 
-    print("\n[4/4] silver: time-series + spike detection")
-    team_df   = build_silver_timeseries(team_results, "team")
+    print("\n[4/5] silver: time-series + spike detection")
+    team_df   = build_silver_timeseries(team_results,   "team")
     player_df = build_silver_timeseries(player_results, "player")
+
+    print("\n[5/5] spike events")
     build_silver_spikes(team_df, player_df)
 
     print("\n[summary]")
