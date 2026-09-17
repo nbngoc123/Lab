@@ -147,7 +147,8 @@ if __name__ == "__main__":
     ingest_fixtures()
 
     print("[3/5] element-summary (chậm, ~5 phút)")
-    ingest_player_histories(pids)
+    # Giới hạn 5 cầu thủ đầu tiên để test nhanh
+    ingest_player_histories(pids[:5])
 
     print("[4/5] live gameweek")
     bs = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")

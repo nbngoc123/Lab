@@ -33,7 +33,8 @@ with DAG(
     @task
     def ingest_player_histories(pids):
         from pipelines.p01.main import ingest_player_histories
-        ingest_player_histories(pids)
+        # Giới hạn lấy 5 cầu thủ đầu tiên để test nhanh
+        ingest_player_histories(pids[:5])
 
     @task
     def ingest_live_gw():
