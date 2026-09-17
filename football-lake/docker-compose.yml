@@ -46,6 +46,8 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U airflow"]
       interval: 10s
@@ -59,7 +61,7 @@ services:
     command: >
       bash -c "
       mkdir -p /opt/airflow/dags && chown -R 50000:0 /opt/airflow/dags
-      && su -s /bin/bash airflow -c 'airflow db migrate'
+      && su -s /bin/bash airflow -c 'airflow db migrate && airflow users create -r Admin -u admin -p admin -e admin@example.com -f admin -l user || true'
       "
 
   airflow-webserver:
