@@ -1,4 +1,4 @@
 FROM apache/airflow:3.3.1
 
-COPY requirements-dev.txt /tmp/requirements-dev.txt
-RUN pip install --no-cache-dir -r /tmp/requirements-dev.txt
+COPY infrastructure/airflow/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
