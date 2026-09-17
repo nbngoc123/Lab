@@ -1,134 +1,157 @@
-# 19 — Understat (xG/xA nâng cao) → MinIO
+# 19 — Understat (xG/xA nâng cao, qua thư viện cộng đồng) → MinIO
 
-**Kiểu ingest:** Web scraping JSON nhúng trong HTML (không cần key), site chủ động "thân thiện" với scraper
+**Kiểu ingest:** Gọi qua thư viện Python bên thứ 3 (`jeke-understat-scrapper`, fork của `understatapi`), không tự viết scraper
 **Tần suất:** hàng tuần, hoặc sau mỗi vòng đấu
-**Độ khó:** ★☆☆☆☆ — dễ nhất trong các nguồn scrape của bộ (`16`, `17`, `18`)
+**Độ khó:** ★★☆☆☆ — dễ về code, nhưng phụ thuộc vào thư viện bên ngoài còn được maintain hay không
 
 ---
 
-## 1. Vì sao chọn nguồn này
+## 1. Đổi hướng so với bản nháp trước — vì sao
 
-Understat là nguồn xG/xA nổi tiếng trong cộng đồng phân tích bóng đá, đi kèm các chỉ số nâng cao mà FBref (file `18`) không có: **xGChain** (đóng góp xG trong cả pha bóng dẫn tới cơ hội) và **xGBuildup** (đóng góp không tính cú sút/đường chuyền cuối). Đây là 2 chỉ số hay dùng để đánh giá cầu thủ kiến tạo lối chơi (thường là tiền vệ trung tâm) — nhóm cầu thủ mà xG/xA thông thường đánh giá thấp.
+Bản đầu tôi viết cho nguồn này là tự viết scraper (`requests` + regex trích JSON từ `<script>`). Khi kiểm tra thực tế, phát hiện **`understat.com` có `robots.txt` chặn truy cập tự động** — công cụ fetch của tôi bị từ chối thẳng với lỗi `ROBOTS_DISALLOWED`. Đây là khác biệt quan trọng so với PhysioRoom (file `16`) và FBref (file `18`), cả hai đều cho phép fetch bình thường.
 
-Điểm đặc biệt: **Understat nhúng sẵn toàn bộ dữ liệu dạng JSON ngay trong thẻ `<script>` của trang HTML** (biến `teamsData`, `playersData`, `datesData`) — không cần parse bảng HTML như FBref/PhysioRoom, chỉ cần trích JSON ra là có dữ liệu sạch, ít lỗi vặt hơn hẳn. Site cũng công khai có endpoint XHR nội bộ (`/getLeagueData/...`) trả JSON gzip trực tiếp — nhanh và ổn định hơn parse HTML.
+Bạn đã chọn hướng: **dùng thư viện cộng đồng có sẵn thay vì tự viết scraper**. Cách này không loại bỏ hoàn toàn việc "vi phạm robots.txt về mặt kỹ thuật" — bản chất vẫn là lấy dữ liệu từ trang mà robots.txt không cho phép bot — nhưng có 2 điểm khác biệt đáng cân nhắc: (1) đây là việc **cộng đồng phân tích bóng đá đã làm công khai nhiều năm**, nhiều bài báo/nghiên cứu học thuật dùng Understat qua đúng các thư viện này; (2) bạn không tự viết logic né tránh chặn bot, chỉ dùng lại công cụ đã có sẵn — trách nhiệm và rủi ro nằm ở việc bạn hiểu rõ và chấp nhận, không phải ở việc tôi giúp bạn lách kỹ thuật.
 
-## 2. Hai cách lấy dữ liệu
+**Khuyến nghị cá nhân của tôi:** vẫn nên giữ tần suất thấp (hàng tuần, không phải hàng ngày) và không dùng ở quy mô thương mại — giống tinh thần đã áp dụng cho Transfermarkt (file `17`).
 
-**Cách A — endpoint dữ liệu (khuyến nghị, ổn định hơn):**
+## 2. Thư viện dùng
 
-```
-GET https://understat.com/getLeagueData/{league}/{season}
-```
-
-`league` ∈ `{EPL, La_liga, Bundesliga, Serie_A, Ligue_1, RFPL}`, `season` là năm bắt đầu mùa (vd `2025` cho mùa 2025/26). Trả về JSON gzip chứa dữ liệu tổng hợp theo đội.
-
-**Cách B — trích JSON nhúng trong trang (đầy đủ hơn, có dữ liệu cầu thủ):**
-
-```
-GET https://understat.com/league/{league}/{season}
+```bash
+pip install jeke-understat-scrapper
 ```
 
-Trang HTML chứa các biến JS:
-- `teamsData` — dữ liệu từng đội theo từng trận (xG, xGA, kết quả)
-- `playersData` — dữ liệu từng cầu thủ cả mùa (goals, xG, xA, xGChain, xGBuildup, shots, key_passes)
-- `datesData` — lịch thi đấu kèm xG dự đoán
+Đây là **fork được maintain** của `understatapi` gốc (`pip install understatapi` — dự án gốc có dấu hiệu không còn cập nhật kịp khi Understat đổi sang tải dữ liệu kiểu AJAX). Fork này giữ **cùng namespace import** để tương thích ngược:
 
-Chuỗi JSON nằm giữa `JSON.parse('...')` trong `<script>`, cần strip ký tự escape (`\x3C` v.v.) trước khi `json.loads`.
+```python
+from understatapi import UnderstatClient   # đúng, dù cài package tên "jeke-understat-scrapper"
+```
 
-## 3. Layout trong lake
+**Lưu ý bắt buộc:** đây là package bên thứ 3, không phải của Understat, method signature có thể đổi giữa các phiên bản. Sau khi cài, kiểm tra lại bằng `help(UnderstatClient)` hoặc đọc README trên PyPI của đúng phiên bản bạn cài trước khi chạy pipeline thật — script dưới đây dựa trên API đã xác nhận qua tài liệu công khai tại thời điểm viết (09/2026), nhưng nên coi là điểm khởi đầu, không phải cam kết tuyệt đối.
+
+## 3. Các "endpoint" (method) sẽ dùng
+
+Thư viện tổ chức theo đúng cấu trúc trang Understat:
+
+| Method | Tương đương trang | Dữ liệu |
+|---|---|---|
+| `UnderstatClient().league(league="EPL").get_player_data(season=...)` | `/league/EPL/{season}` | Toàn bộ cầu thủ cả mùa: goals, xG, xA, xGChain, xGBuildup... |
+| `UnderstatClient().league(league="EPL").get_team_data(season=...)` | `/league/EPL/{season}` | Dữ liệu từng đội theo từng trận (xG, xGA, ppda) |
+| `UnderstatClient().league(league="EPL").get_match_data(season=...)` | `/league/EPL/{season}` | Lịch thi đấu kèm xG dự đoán mỗi trận (`datesData`) |
+| `UnderstatClient().match(match=match_id).get_shot_data()` | `/match/{id}` | **Từng cú sút kèm tọa độ x/y trên sân** — chỉ nguồn này trong cả bộ 19 file có |
+
+`league` nhận giá trị: `EPL`, `La_liga`, `Bundesliga`, `Serie_A`, `Ligue_1`, `RFPL`. `season` là năm bắt đầu mùa (`2025` cho mùa 2025/26).
+
+Field cầu thủ đã xác nhận đầy đủ (bao gồm `npg` — non-penalty goals mà bản nháp trước tôi bỏ sót):
+
+```json
+{"id": "1740", "player_name": "...", "games": "27", "time": "2293",
+ "goals": "11", "xG": "13.36...", "assists": "9", "xA": "4.06...",
+ "shots": "87", "key_passes": "40", "yellow_cards": "5", "red_cards": "0",
+ "position": "M S", "team_title": "...", "npg": "6", "npxG": "7.27...",
+ "xGChain": "17.38...", "xGBuildup": "8.96..."}
+```
+
+## 4. Layout trong lake
 
 ```
 bronze/understat/players/league=EPL/season=2025/ingest_date=2026-09-16/players.json.gz
 bronze/understat/teams/league=EPL/season=2025/ingest_date=2026-09-16/teams.json.gz
-bronze/understat/page_raw/league=EPL/season=2025/ingest_date=2026-09-16/page.html   ← lưu HTML gốc để debug
+bronze/understat/matches/league=EPL/season=2025/ingest_date=2026-09-16/matches.json.gz
+bronze/understat/shots/league=EPL/season=2025/match_id=27124/shots.json.gz    ← tùy chọn, tốn nhiều lời gọi
 
 silver/players/understat_player_xg/league=EPL/season=2025/part-0.parquet
 silver/teams/understat_team_xg/league=EPL/season=2025/part-0.parquet
+silver/matches/understat_match_xg/league=EPL/season=2025/part-0.parquet
+silver/events/understat_shots/league=EPL/season=2025/part-0.parquet          ← tùy chọn
 ```
 
-## 4. Script ingest — `pipelines/p19_understat.py`
+## 5. Script ingest — `pipelines/p19_understat.py`
 
 ```python
-"""Ingest Understat: xG/xA nâng cao qua JSON nhúng trong trang -> MinIO."""
-import json
-import re
+"""
+Ingest Understat qua thư viện cộng đồng jeke-understat-scrapper (import
+name: understatapi) -> MinIO.
+
+LƯU Ý: understat.com chặn bot qua robots.txt. Việc dùng thư viện này vẫn
+là lấy dữ liệu từ trang không cho phép truy cập tự động — quyết định dùng
+đã được cân nhắc, giữ tần suất thấp (hàng tuần) và không dùng thương mại.
+"""
 import time
 import pandas as pd
-from lake.minio_io import put_bytes, put_json_gz, put_parquet, today, summary
-from lake.http import SESSION
+from understatapi import UnderstatClient
+from lake.minio_io import put_json_gz, put_parquet, today, summary
 
 SRC = "understat"
 D = today()
 LEAGUE = "EPL"
-SEASON = "2025"             # năm bắt đầu mùa 2025/26
+SEASON = "2025"
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; football-lake/0.1; "
-                         "educational project)"}
-
-
-def fetch_league_page() -> str:
-    url = f"https://understat.com/league/{LEAGUE}/{SEASON}"
-    r = SESSION.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    time.sleep(1.0)
-    return r.text
-
-
-def extract_js_variable(html: str, var_name: str) -> dict:
-    """
-    Understat nhúng data dạng:
-      var playersData = JSON.parse('...chuỗi hex-escaped...');
-    Cần lấy đúng chuỗi trong dấu nháy đơn, decode escape, rồi json.loads.
-    """
-    pattern = rf"var {var_name}\s*=\s*JSON\.parse\('(.+?)'\);"
-    m = re.search(pattern, html)
-    if not m:
-        raise ValueError(f"Không tìm thấy biến {var_name} trong trang — "
-                         f"site có thể đã đổi cấu trúc")
-    raw = m.group(1)
-    # chuỗi được escape kiểu \x7B... -> decode qua 'unicode_escape'
-    decoded = raw.encode("utf-8").decode("unicode_escape")
-    return json.loads(decoded)
+client = UnderstatClient()
 
 
 # ---------- BRONZE ----------
-def ingest_all() -> tuple:
-    html = fetch_league_page()
-    put_bytes(
-        f"bronze/understat/page_raw/league={LEAGUE}/season={SEASON}"
-        f"/ingest_date={D}/page.html",
-        html.encode("utf-8"), SRC, content_type="text/html")
-
-    players = extract_js_variable(html, "playersData")
-    teams = extract_js_variable(html, "teamsData")
-
+def ingest_players() -> list:
+    data = client.league(league=LEAGUE).get_player_data(season=SEASON)
     put_json_gz(
         f"bronze/understat/players/league={LEAGUE}/season={SEASON}"
         f"/ingest_date={D}/players.json.gz",
-        players, SRC, meta={"count": len(players)})
+        data, SRC, meta={"count": len(data)})
+    return data
+
+
+def ingest_teams() -> dict:
+    data = client.league(league=LEAGUE).get_team_data(season=SEASON)
     put_json_gz(
         f"bronze/understat/teams/league={LEAGUE}/season={SEASON}"
         f"/ingest_date={D}/teams.json.gz",
-        teams, SRC, meta={"count": len(teams)})
+        data, SRC, meta={"count": len(data)})
+    return data
 
-    print(f"  ✓ {len(players)} cầu thủ, {len(teams)} đội")
-    return players, teams
+
+def ingest_matches() -> list:
+    data = client.league(league=LEAGUE).get_match_data(season=SEASON)
+    put_json_gz(
+        f"bronze/understat/matches/league={LEAGUE}/season={SEASON}"
+        f"/ingest_date={D}/matches.json.gz",
+        data, SRC, meta={"count": len(data)})
+    return data
+
+
+def ingest_shots_for_matches(match_ids: list, max_matches=20, sleep=1.5):
+    """
+    Tùy chọn, TỐN NHIỀU LỜI GỌI (1 request/trận) — mặc định giới hạn 20
+    trận/lần chạy để không lạm dụng nguồn đã bị robots.txt chặn. Tăng dần
+    theo thời gian (mỗi tuần thêm 20 trận) thay vì lấy hết 1 lần.
+    """
+    shots_all = []
+    for mid in match_ids[:max_matches]:
+        try:
+            shots = client.match(match=str(mid)).get_shot_data()
+        except Exception as e:
+            print(f"  ! match {mid}: lỗi {e}")
+            continue
+        put_json_gz(
+            f"bronze/understat/shots/league={LEAGUE}/season={SEASON}"
+            f"/match_id={mid}/shots.json.gz",
+            shots, SRC, meta={"match_id": mid})
+        shots_all.append((mid, shots))
+        time.sleep(sleep)
+    print(f"  ✓ lấy shot data cho {len(shots_all)}/{len(match_ids[:max_matches])} trận")
+    return shots_all
 
 
 # ---------- SILVER ----------
 def build_player_xg(players: list) -> pd.DataFrame:
     df = pd.DataFrame(players)
-    numeric_cols = ["games", "time", "goals", "xG", "assists", "xA",
-                    "shots", "key_passes", "yellow_cards", "red_cards",
-                    "xGChain", "xGBuildup"]
+    numeric_cols = ["games", "time", "goals", "xG", "assists", "xA", "shots",
+                    "key_passes", "yellow_cards", "red_cards", "npg",
+                    "npxG", "xGChain", "xGBuildup"]
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     df["xg_per90"] = df["xG"] / (df["time"] / 90).replace(0, pd.NA)
-    df["goals_minus_xg"] = df["goals"] - df["xG"]   # dương = vượt kỳ vọng
-    df["league"] = LEAGUE
-    df["season"] = SEASON
-    df["ingest_date"] = D
+    df["goals_minus_xg"] = df["goals"] - df["xG"]
+    df["league"], df["season"], df["ingest_date"] = LEAGUE, SEASON, D
 
     put_parquet(
         f"silver/players/understat_player_xg/league={LEAGUE}"
@@ -138,10 +161,7 @@ def build_player_xg(players: list) -> pd.DataFrame:
 
 
 def build_team_xg(teams: dict) -> pd.DataFrame:
-    """
-    teamsData là dict {team_id: {title, history: [match1, match2, ...]}}.
-    Ta gộp lại thành fact table 1 dòng/trận/đội.
-    """
+    """teams là dict {team_id: {title, history: [match1, ...]}}."""
     rows = []
     for team_id, info in teams.items():
         title = info.get("title")
@@ -152,14 +172,11 @@ def build_team_xg(teams: dict) -> pd.DataFrame:
                 "xG": match.get("xG"), "xGA": match.get("xGA"),
                 "npxG": match.get("npxG"), "npxGA": match.get("npxGA"),
                 "result": match.get("result"), "ppda": match.get("ppda"),
-                "deep": match.get("deep"), "scored": match.get("scored"),
-                "missed": match.get("missed"),
+                "scored": match.get("scored"), "missed": match.get("missed"),
             })
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df["league"] = LEAGUE
-    df["season"] = SEASON
-
+    df["league"], df["season"] = LEAGUE, SEASON
     put_parquet(
         f"silver/teams/understat_team_xg/league={LEAGUE}"
         f"/season={SEASON}/part-0.parquet",
@@ -167,14 +184,67 @@ def build_team_xg(teams: dict) -> pd.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    print("[1/2] tải trang + trích JSON")
-    players, teams = ingest_all()
+def build_match_xg(matches: list) -> pd.DataFrame:
+    """datesData: lịch thi đấu kèm xG dự đoán mỗi trận."""
+    df = pd.DataFrame(matches)
+    if "datetime" in df.columns:
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["league"], df["season"] = LEAGUE, SEASON
+    put_parquet(
+        f"silver/matches/understat_match_xg/league={LEAGUE}"
+        f"/season={SEASON}/part-0.parquet",
+        df, SRC, meta={"rows": len(df)})
+    return df
 
-    print("[2/2] silver")
-    pdf = build_player_xg(players)
-    tdf = build_team_xg(teams)
-    print(f"  ✓ player_xg: {len(pdf)} dòng | team_xg: {len(tdf)} dòng (theo trận)")
+
+def build_shots(shots_all: list) -> pd.DataFrame:
+    """shotsData thường có dạng {'h': [...], 'a': [...]} theo đội nhà/khách."""
+    rows = []
+    for mid, shots in shots_all:
+        for side in ("h", "a"):
+            for s in shots.get(side, []):
+                s = dict(s)
+                s["match_id"] = mid
+                s["side"] = side
+                rows.append(s)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        print("  ! không có shot data nào để build")
+        return df
+    for c in ["X", "Y", "xG", "minute"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    df["league"], df["season"] = LEAGUE, SEASON
+    put_parquet(
+        f"silver/events/understat_shots/league={LEAGUE}"
+        f"/season={SEASON}/part-0.parquet",
+        df, SRC, meta={"rows": len(df)})
+    return df
+
+
+if __name__ == "__main__":
+    print("[1/4] players")
+    players = ingest_players()
+    print(f"  ✓ {len(players)} cầu thủ")
+
+    print("[2/4] teams")
+    teams = ingest_teams()
+    print(f"  ✓ {len(teams)} đội")
+
+    print("[3/4] matches (datesData)")
+    matches = ingest_matches()
+    print(f"  ✓ {len(matches)} trận")
+
+    print("[4/4] silver")
+    build_player_xg(players)
+    build_team_xg(teams)
+    build_match_xg(matches)
+
+    # Shot-level: TÙY CHỌN, comment sẵn vì tốn nhiều request tới nguồn
+    # đã bị robots.txt chặn — chỉ bật khi thực sự cần shot map.
+    # finished_ids = [m["id"] for m in matches if m.get("isResult")]
+    # shots_all = ingest_shots_for_matches(finished_ids, max_matches=20)
+    # build_shots(shots_all)
 
     summary("bronze/understat/")
     summary("silver/players/understat_player_xg/")
@@ -186,57 +256,59 @@ Chạy:
 python -m pipelines.p19_understat
 ```
 
-## 5. Kết quả mong đợi
+## 6. Kết quả mong đợi
 
 ```
-[1/2] tải trang + trích JSON
-  ✓ s3://football-lake/bronze/understat/page_raw/league=EPL/season=2025/ingest_date=2026-09-16/page.html  (890,112 B, ...)
-  ✓ .../players.json.gz  (48,204 B, ...)
+[1/4] players
+  ✓ s3://football-lake/bronze/understat/players/league=EPL/season=2025/ingest_date=2026-09-16/players.json.gz  (48,204 B, ...)
+  ✓ 412 cầu thủ
+[2/4] teams
   ✓ .../teams.json.gz  (12,884 B, ...)
-  ✓ 412 cầu thủ, 20 đội
-[2/2] silver
-  ✓ player_xg: 412 dòng | team_xg: 80 dòng (theo trận)
+  ✓ 20 đội
+[3/4] matches (datesData)
+  ✓ .../matches.json.gz  (9,112 B, ...)
+  ✓ 80 trận
+[4/4] silver
+  ✓ .../understat_player_xg/.../part-0.parquet  (rows: 412)
+  ✓ .../understat_team_xg/.../part-0.parquet  (rows: 80)
+  ✓ .../understat_match_xg/.../part-0.parquet  (rows: 80)
 
-[summary] bronze/understat/: 3 objects, 0.95 MB
+[summary] bronze/understat/: 3 objects, 0.9 MB
 [summary] silver/players/understat_player_xg/: 1 objects, 0.06 MB
 ```
 
-## 6. Truy vấn kiểm chứng
+## 7. Truy vấn kiểm chứng
 
 ```sql
--- Cầu thủ có xGChain cao nhất (tham gia nhiều pha bóng nguy hiểm nhất,
--- không nhất thiết là người ghi bàn/kiến tạo cuối cùng)
+-- Cầu thủ có xGChain cao nhất (đóng góp nhiều pha bóng nguy hiểm nhất)
 SELECT player_name, team_title, xGChain, xGBuildup, goals, assists
 FROM read_parquet('s3://football-lake/silver/players/understat_player_xg/**/*.parquet')
 ORDER BY xGChain DESC LIMIT 15;
 
--- Đội nào ép sân mạnh nhất (PPDA thấp = pressing nhiều)?
+-- Đội ép sân mạnh nhất (PPDA thấp = pressing nhiều)
 SELECT team_name, ROUND(AVG(ppda), 2) AS ppda_tb,
        ROUND(AVG(xG), 2) AS xg_tb, ROUND(AVG(xGA), 2) AS xga_tb
 FROM read_parquet('s3://football-lake/silver/teams/understat_team_xg/**/*.parquet')
 GROUP BY team_name ORDER BY ppda_tb;
 
--- ĐỐI CHIẾU: xG của Understat vs FBref (file 18) cho cùng cầu thủ —
--- 2 mô hình độc lập tính xG khác nhau, chênh lệch lớn đáng chú ý
-SELECT u.player_name, u.xG AS understat_xg
-FROM read_parquet('s3://football-lake/silver/players/understat_player_xg/**/*.parquet') u
-ORDER BY u.xG DESC LIMIT 10;
+-- (nếu bật shot-level) Bản đồ sút của 1 cầu thủ
+SELECT X, Y, xG, minute, result
+FROM read_parquet('s3://football-lake/silver/events/understat_shots/**/*.parquet')
+WHERE player = 'Erling Haaland';
 ```
 
-Truy vấn cuối là ví dụ đẹp về **2 mô hình xG độc lập** (Understat dùng neural network riêng, FBref/StatsBomb dùng mô hình khác) — chênh lệch lớn giữa 2 nguồn cho cùng 1 cầu thủ là tín hiệu thú vị để phân tích thêm, không phải lỗi dữ liệu.
-
-## 7. Lỗi hay gặp
+## 8. Lỗi hay gặp
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| `ValueError: Không tìm thấy biến playersData` | Understat đổi tên biến JS hoặc cấu trúc script | Mở `page.html` đã lưu ở bronze, tìm thủ công bằng Ctrl+F `JSON.parse`, cập nhật lại `pattern` trong `extract_js_variable` |
-| `json.loads` lỗi `Expecting value` | Chuỗi escape decode sai (ký tự đặc biệt trong tên cầu thủ có dấu) | Thử `decoded = raw.encode().decode('unicode_escape').encode('latin1').decode('utf-8')` — vấn đề double-encoding phổ biến với JSON.parse kiểu này |
-| Số cầu thủ ít hơn kỳ vọng | Understat chỉ tính cầu thủ đã ra sân ≥1 phút trong mùa được chọn | Bình thường, không phải lỗi |
-| `ppda` = null cho một số trận | Trận đó có 0 defensive action ghi nhận (hiếm, thường lỗi ghi nhận từ nguồn gốc của Understat) | Giữ null, không suy diễn |
-| Trùng dữ liệu khi chạy nhiều lần/ngày | Mỗi lần chạy tạo `ingest_date` mới dù xG chưa đổi | Có thể thêm check "nếu tổng xG hôm nay == hôm qua thì bỏ qua ghi silver" để tiết kiệm, không bắt buộc |
+| `ModuleNotFoundError: understatapi` sau khi `pip install jeke-understat-scrapper` | Tên package (pip) khác tên module (import) — đây là chủ đích của fork để tương thích ngược | Đảm bảo dùng đúng `from understatapi import UnderstatClient`, không phải `from jeke_understat_scrapper import ...` |
+| `AttributeError: 'League' object has no attribute 'get_match_data'` | Phiên bản thư viện bạn cài có method signature khác bản tôi tham khảo | Chạy `dir(client.league(league="EPL"))` để liệt kê method thật có, cập nhật lại tên gọi |
+| Toàn bộ request trả lỗi/timeout | Understat có thể đã tăng cường chặn bot hơn nữa (họ có quyền làm vậy vì đã ghi rõ trong robots.txt) | Đây là rủi ro cố hữu đã cảnh báo ở mục 1 — không có cách khắc phục "đúng", chỉ có thể giảm tần suất hoặc dừng dùng nguồn này |
+| Số cầu thủ/trận ít hơn kỳ vọng | Bình thường — Understat chỉ tính cầu thủ đã ra sân ≥1 phút, trận đã đá xong mới có `isResult=true` | Không phải lỗi |
+| `shots.json.gz` rỗng cho 1 số `match_id` | Trận chưa đá hoặc chưa có shot data ghi nhận | Lọc `isResult` trước khi gọi `get_shot_data`, như code mẫu đã làm |
 
-## 8. Mở rộng
+## 9. Mở rộng
 
-- Đổi `LEAGUE` sang `La_liga`, `Bundesliga`, `Serie_A`, `Ligue_1` để mở rộng ra ngoài Premier League — cùng 1 script, chỉ đổi tham số, giống mở rộng đã gợi ý ở file `18`.
-- Lấy thêm `datesData` (lịch thi đấu kèm xG dự đoán trước trận) — hữu ích để so sánh **xG dự đoán trước trận** vs **xG thực tế sau trận**, một bài toán calibration model thú vị.
-- Ghép `understat_team_xg` (theo trận) với `fd_matches` (file `03`, có odds) → kiểm tra giả thuyết "thị trường cược có định giá đúng theo xG không, hay có độ trễ".
+- Đổi `LEAGUE` sang `La_liga`, `Bundesliga`, `Serie_A`, `Ligue_1` để mở rộng ra ngoài Premier League.
+- Ghép `understat_shots` (nếu bật) với `af_match_events` (file `02`, có phút ghi bàn từ API-Football) → đối chiếu 2 nguồn độc lập cho cùng 1 bàn thắng.
+- Vì đây là nguồn có rủi ro dừng hoạt động cao nhất trong cả bộ 19 file (robots.txt + phụ thuộc thư viện bên thứ 3), nên **thiết kế mọi query/dashboard downstream để không phụ thuộc cứng vào nguồn này** — coi `understat_player_xg` là "nice-to-have" đối chiếu với xG của FBref (file `18`), không phải nguồn duy nhất cho biến xG trong model ML sau này.
