@@ -2,7 +2,9 @@ version: '3.8'
 
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:3.3.1
+  build:
+    context: .
+    dockerfile: Dockerfile
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -11,7 +13,6 @@ x-airflow-common:
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     PYTHONPATH: /opt/project
-    _PIP_ADDITIONAL_REQUIREMENTS: "-r /opt/project/requirements.txt"
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
     - .:/opt/project
