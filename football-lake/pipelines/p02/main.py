@@ -36,7 +36,7 @@ def call(path: str, params: dict) -> dict:
     if body.get("errors"):
         raise RuntimeError(f"API trả lỗi: {body['errors']}")
     print(f"    [quota] dùng {_used}/{DAILY_BUDGET} | server còn {_remaining}")
-    time.sleep(1.0)          # free plan giới hạn ~10 req/phút
+    time.sleep(6.1)          # free plan giới hạn ~10 req/phút, cần sleep >6s
     return body
 
 

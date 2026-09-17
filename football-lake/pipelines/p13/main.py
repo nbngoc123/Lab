@@ -31,21 +31,30 @@ def fetch_forecast(lat: float, lon: float) -> dict:
 
 
 # ---------- BRONZE ----------
-def load_stadiums() -> pd.DataFrame:
-    """Đọc dimension sân đã ingest ở file 06 (Wikidata) — không hardcode tọa độ."""
-    import duckdb
-    con = duckdb.connect()
-    con.execute("INSTALL httpfs; LOAD httpfs;")
-    con.execute("""
-      SET s3_endpoint='localhost:9000'; SET s3_use_ssl=false;
-      SET s3_url_style='path';
-      SET s3_access_key_id='minioadmin'; SET s3_secret_access_key='minioadmin123';
-    """)
-    df = con.sql("""
-        SELECT venueLabel AS venue, lat, lon
-        FROM read_parquet('s3://football-lake/silver/dim/wd_stadiums/**/*.parquet')
-        WHERE lat IS NOT NULL AND lon IS NOT NULL
-    """).df()
+def load_stadiums() -> list:
+    import io
+    from lake.minio_io import S3, BUCKET
+    
+    prefix = "silver/dim/wd_stadiums/"
+    try:
+        objs = S3.list_objects_v2(Bucket=BUCKET, Prefix=prefix).get("Contents", [])
+    except Exception as e:
+        print(f"  ! Lỗi S3: {e}")
+        return []
+        
+    dfs = []
+    for obj in objs:
+        if obj["Key"].endswith(".parquet"):
+            body = S3.get_object(Bucket=BUCKET, Key=obj["Key"])["Body"].read()
+            dfs.append(pd.read_parquet(io.BytesIO(body)))
+            
+    if not dfs:
+        return []
+        
+    df = pd.concat(dfs, ignore_index=True)
+    if "venueLabel" in df.columns:
+        df = df.rename(columns={"venueLabel": "venue"})
+    df = df[df.lat.notna() & df.lon.notna()]
     
     # Giới hạn lấy 2 sân để test nhanh theo yêu cầu
     return df.head(2).to_dict('records')
@@ -113,23 +122,27 @@ def join_weather_to_matches(weather: pd.DataFrame, venue_map: dict):
     """
     if weather.empty:
         return
-    import duckdb
-    con = duckdb.connect()
-    con.execute("INSTALL httpfs; LOAD httpfs;")
-    con.execute("""
-      SET s3_endpoint='localhost:9000'; SET s3_use_ssl=false;
-      SET s3_url_style='path';
-      SET s3_access_key_id='minioadmin'; SET s3_secret_access_key='minioadmin123';
-    """)
-    # Chỉ đọc season=2425 do p03 đã được giới hạn ở 2425 để test
+    import io
+    from lake.minio_io import S3, BUCKET
+
+    prefix = "silver/matches/fd_matches/division=E0/season=2425/"
     try:
-        matches = con.sql("""
-            SELECT * FROM read_parquet(
-              's3://football-lake/silver/matches/fd_matches/division=E0/season=2425/**/*.parquet')
-        """).df()
+        objs = S3.list_objects_v2(Bucket=BUCKET, Prefix=prefix).get("Contents", [])
     except Exception as e:
         print(f"  ! Lỗi đọc fd_matches (có thể do p03 chưa tải dữ liệu): {e}")
         return
+        
+    dfs = []
+    for obj in objs:
+        if obj["Key"].endswith(".parquet"):
+            body = S3.get_object(Bucket=BUCKET, Key=obj["Key"])["Body"].read()
+            dfs.append(pd.read_parquet(io.BytesIO(body)))
+            
+    if not dfs:
+        print("  ! Không tìm thấy dữ liệu trận đấu fd_matches")
+        return
+        
+    matches = pd.concat(dfs, ignore_index=True)
 
     matches["venue"] = matches["home_team"].map(venue_map)
     weather = weather.copy()
