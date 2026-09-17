@@ -5,3 +5,8 @@ pyarrow
 python-dotenv
 lxml
 beautifulsoup4
+# p07 - Reddit + RSS
+praw
+feedparser
+# p19 - Understat
+jeke-understat-scrapper
