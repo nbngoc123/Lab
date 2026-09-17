@@ -57,6 +57,10 @@ def schema_report(keys: dict):
         report[f"{div}_{season}"] = {"n_cols": len(cols), "cols": cols}
         all_cols |= set(cols)
 
+    if not report:
+        print("  ! Không có file nào được tải về, bỏ qua report.")
+        return {}
+
     # cột nào xuất hiện ở mọi file?
     common = set.intersection(*[set(v["cols"]) for v in report.values()])
     report["_summary"] = {
