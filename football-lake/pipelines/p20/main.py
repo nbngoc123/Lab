@@ -67,15 +67,17 @@ def clean_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
+TEST_MODE = True
+
 # ---------------------------------------------------------------------------
 # Wikipedia
 # ---------------------------------------------------------------------------
 def ingest_wikipedia():
     all_articles = []
-    # Lấy cả tiếng Anh và tiếng Việt nếu có
     langs = ["en", "vi"]
     
     for entity_type, titles in WIKI_PAGES.items():
+        if TEST_MODE: titles = titles[:1] # Lấy 1 trang mỗi loại để test
         print(f"\n  [Wiki] Entity: {entity_type}")
         for title in titles:
             for lang in langs:
@@ -117,7 +119,8 @@ def ingest_wikipedia():
 # ---------------------------------------------------------------------------
 def ingest_google_news():
     all_entries = []
-    for q_cfg in NEWS_QUERIES:
+    queries = NEWS_QUERIES[:2] if TEST_MODE else NEWS_QUERIES
+    for q_cfg in queries:
         q = urllib.parse.quote(q_cfg["q"])
         url = f"https://news.google.com/rss/search?q={q}&hl={q_cfg['hl']}&gl={q_cfg['gl']}&ceid={q_cfg['ceid']}"
         try:
