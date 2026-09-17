@@ -88,7 +88,7 @@ def ingest_forecast(stadiums: list):
         put_json_gz(
             f"bronze/open_meteo/forecast/venue={venue_safe}"
             f"/ingest_date={D}/forecast.json.gz",
-            body, SRC, meta={"venue": row.venue})
+            body, SRC, meta={"venue": venue})
 
 
 # ---------- SILVER ----------
