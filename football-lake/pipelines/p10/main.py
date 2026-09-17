@@ -30,6 +30,10 @@ HEADERS = {"User-Agent": UA}
 START = "20230101"   # yyyymmdd
 END   = date.today().strftime("%Y%m%d")
 
+# True = chỉ lấy 3 đội + 3 cầu thủ để test nhanh
+# False = chạy full (có thể mất 10-20 phút)
+TEST_MODE = True
+
 # ---------------------------------------------------------------------------
 # Seed lists (hardcoded - đảm bảo chính xác)
 # ---------------------------------------------------------------------------
@@ -311,8 +315,12 @@ def build_silver_spikes(team_df: pd.DataFrame, player_df: pd.DataFrame):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+def _slice(d: dict, n: int) -> dict:
+    return dict(list(d.items())[:n])
+
+
 def run_pipeline():
-    print("[0/5] Auto-discover cầu thủ từ Silver fdo_players (p09)...")
+    print(f"[0/5] Auto-discover cầu thủ từ Silver fdo_players (p09)... (TEST_MODE={TEST_MODE})")
     auto_players = load_players_from_silver()
 
     # Gộp seed + auto-discovered, seed có thể ghi đè (title chính xác hơn)
@@ -320,14 +328,19 @@ def run_pipeline():
     print(f"  · Tổng players: {len(all_players)} "
           f"(seed: {len(SEED_PLAYERS)}, auto: {len(auto_players)})")
 
-    print("\n[1/5] pageviews đội bóng + giải đấu (multi-lang)")
-    team_results = ingest_entities_multilang(TEAMS, "team")
+    # Test mode: giới hạn số lượng để chạy nhanh
+    teams_run   = _slice(TEAMS,       3) if TEST_MODE else TEAMS
+    players_run = _slice(all_players, 3) if TEST_MODE else all_players
+    top_days    = 1                      if TEST_MODE else 7
 
-    print(f"\n[2/5] pageviews {len(all_players)} cầu thủ + HLV (multi-lang)")
-    player_results = ingest_entities_multilang(all_players, "player")
+    print(f"\n[1/5] pageviews đội bóng ({len(teams_run)} đội, multi-lang)")
+    team_results = ingest_entities_multilang(teams_run, "team")
 
-    print("\n[3/5] top viral 7 ngày gần nhất (all langs)")
-    ingest_top_daily_multilang(n_days=7)
+    print(f"\n[2/5] pageviews {len(players_run)} cầu thủ (multi-lang)")
+    player_results = ingest_entities_multilang(players_run, "player")
+
+    print(f"\n[3/5] top viral {top_days} ngày gần nhất (all langs)")
+    ingest_top_daily_multilang(n_days=top_days)
 
     print("\n[4/5] silver: time-series + spike detection")
     team_df   = build_silver_timeseries(team_results,   "team")
