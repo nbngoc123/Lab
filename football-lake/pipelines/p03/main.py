@@ -9,9 +9,8 @@ from lake.http import get
 SRC = "football-data.co.uk"
 BASE = "https://www.football-data.co.uk/mmz4281"
 
-DIVISIONS = ["E0", "E1", "E2", "E3"]        # 4 hạng đấu Anh
-SEASONS = ["1516", "1617", "1718", "1819", "1920",
-           "2021", "2122", "2223", "2324", "2425"]
+DIVISIONS = ["E0"]        # Test nhanh: chỉ lấy Ngoại Hạng Anh
+SEASONS = ["2425"]        # Test nhanh: chỉ lấy mùa hiện tại
 
 CORE = ["Div", "Date", "Time", "HomeTeam", "AwayTeam",
         "FTHG", "FTAG", "FTR", "HTHG", "HTAG", "HTR",

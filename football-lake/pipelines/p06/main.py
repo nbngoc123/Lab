@@ -44,7 +44,7 @@ WHERE {
   OPTIONAL { ?player wdt:P21   ?sex }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 }
-LIMIT 5000
+LIMIT 50 # Test nhanh: giới hạn 50 cầu thủ thay vì 5000
 """,
 
     # ---- Sân vận động + tọa độ ----
