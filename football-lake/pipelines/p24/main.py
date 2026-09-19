@@ -8,17 +8,22 @@ Lấy toàn diện dữ liệu EPL từ v3.football.api-sports.io:
   - Top Scorers, Top Assists
 Yêu cầu: API_FOOTBALL_KEY trong .env (Free: 100 req/ngày)
 """
+import hashlib
 import json
 import os
 import time
+from urllib.parse import urlparse
 
 import pandas as pd
 
 from lake.minio_io import (
-    put_json_gz, put_parquet, read_json_gz,
+    put_json_gz, put_bytes, put_parquet, read_json_gz,
     exists, today, summary, S3, BUCKET
 )
 from lake.http import SESSION
+
+MIME = {".png": "image/png", ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 # ─────────────────── config ───────────────────────────────────────────────
 BASE       = "https://v3.football.api-sports.io"
@@ -117,6 +122,181 @@ def ingest_top_scorers():
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} top scorers -> bronze")
     return body
+
+
+# ─── TOP STATS (không tốn nhiều quota) ───────────────────────────────────────
+def ingest_top_assists():
+    key = f"bronze/api_football/top_assists/season={SEASON}/ingest_date={D}/assists.json.gz"
+    body = call("/players/topassists", {"league": LEAGUE, "season": SEASON})
+    put_json_gz(key, body, SRC, meta={"count": body["results"]})
+    print(f"  ✓ {body['results']} top assists -> bronze")
+    return body
+
+
+def ingest_top_yellow_cards():
+    key = f"bronze/api_football/top_yellow/season={SEASON}/ingest_date={D}/yellow.json.gz"
+    body = call("/players/topyellowcards", {"league": LEAGUE, "season": SEASON})
+    put_json_gz(key, body, SRC, meta={"count": body["results"]})
+    print(f"  ✓ {body['results']} top yellow cards -> bronze")
+    return body
+
+
+def ingest_top_red_cards():
+    key = f"bronze/api_football/top_red/season={SEASON}/ingest_date={D}/red.json.gz"
+    body = call("/players/topredcards", {"league": LEAGUE, "season": SEASON})
+    put_json_gz(key, body, SRC, meta={"count": body["results"]})
+    print(f"  ✓ {body['results']} top red cards -> bronze")
+    return body
+
+
+def ingest_injuries():
+    """Danh sách chấn thương hiện tại."""
+    key = f"bronze/api_football/injuries/season={SEASON}/ingest_date={D}/injuries.json.gz"
+    body = call("/injuries", {"league": LEAGUE, "season": SEASON})
+    put_json_gz(key, body, SRC, meta={"count": body["results"]})
+    print(f"  ✓ {body['results']} injuries -> bronze")
+    return body
+
+
+# ─── PLAYERS (profile + season stats) ────────────────────────────────────────
+def ingest_players_squad():
+    """
+    Lấy danh sách cầu thủ EPL kèm thống kê mùa giải.
+    API trả về ~20 cầu thủ/page. Free tier: page 1 thôi (tiết kiệm quota).
+    Mỗi lần chạy tăng thêm 1 page, checkpoint bằng page đã lấy.
+    """
+    ck_key = "_meta/api_football_p24/players_checkpoint.json"
+    if exists(ck_key):
+        raw = S3.get_object(Bucket=BUCKET, Key=ck_key)["Body"].read()
+        last_page = json.loads(raw).get("last_page", 0)
+    else:
+        last_page = 0
+
+    page = last_page + 1
+    key = f"bronze/api_football/players/season={SEASON}/page={page}/players.json.gz"
+    if exists(key):
+        print(f"  · players page {page} đã cache, bỏ qua")
+        return
+
+    body = call("/players", {"league": LEAGUE, "season": SEASON, "page": page})
+    total_pages = (body.get("paging") or {}).get("total", 1)
+    put_json_gz(key, body, SRC, meta={"page": page, "total_pages": total_pages})
+    print(f"  ✓ players page {page}/{total_pages} -> bronze")
+
+    # Lưu checkpoint page
+    S3.put_object(
+        Bucket=BUCKET, Key=ck_key,
+        Body=json.dumps({"last_page": page, "total_pages": total_pages}).encode(),
+        ContentType="application/json"
+    )
+    return body, page, total_pages
+
+
+# ─── BINARY MEDIA (logo + venue + player photo) ───────────────────────────────
+def _fetch_binary(url: str, s3_key: str, entity: str, eid: str, role: str) -> dict | None:
+    """Tải 1 file ảnh về MinIO. Idempotent."""
+    if not url or not url.startswith("http"):
+        return None
+    if exists(s3_key):
+        try:
+            head = S3.head_object(Bucket=BUCKET, Key=s3_key)
+            return {"s3_key": s3_key, "entity": entity, "entity_id": str(eid),
+                    "role": role, "size_bytes": head.get("ContentLength", 0),
+                    "sha256": "cached", "source_url": url, "ingest_date": D}
+        except Exception:
+            return None
+    try:
+        r = SESSION.get(url, timeout=30)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"    ! không tải {role} {eid}: {e}")
+        return None
+    data = r.content
+    ext = os.path.splitext(urlparse(url).path)[1].lower() or ".png"
+    ctype = MIME.get(ext, "image/png")
+    put_bytes(s3_key, data, SRC, content_type=ctype,
+              meta={"entity": entity, "entity_id": str(eid), "role": role})
+    time.sleep(0.3)
+    return {"s3_key": s3_key, "entity": entity, "entity_id": str(eid),
+            "role": role, "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "source_url": url, "ingest_date": D}
+
+
+def ingest_media_binary(teams_body: dict) -> list:
+    """
+    Tải binary: logo đội, ảnh sân (từ /teams), và ảnh cầu thủ (từ /players đã cache).
+    Không tốn quota API — chỉ HTTP GET đến CDN.
+    """
+    manifest = []
+
+    # A1: Logo đội + ảnh sân
+    for item in teams_body.get("response", []):
+        team = item.get("team", {})
+        venue = item.get("venue", {})
+        tid = team.get("id")
+        tname = team.get("name", tid)
+
+        # Logo đội
+        logo_url = team.get("logo")
+        if logo_url:
+            ext = os.path.splitext(urlparse(logo_url).path)[1].lower() or ".png"
+            mf = _fetch_binary(
+                logo_url,
+                f"bronze/api_football/media/entity=team/team_id={tid}/logo{ext}",
+                "team", tid, "logo"
+            )
+            if mf:
+                manifest.append(mf)
+
+        # Ảnh sân vận động
+        venue_url = venue.get("image")
+        vid = venue.get("id", tid)
+        if venue_url:
+            ext = os.path.splitext(urlparse(venue_url).path)[1].lower() or ".jpg"
+            mf = _fetch_binary(
+                venue_url,
+                f"bronze/api_football/media/entity=venue/venue_id={vid}/photo{ext}",
+                "venue", vid, "photo"
+            )
+            if mf:
+                manifest.append(mf)
+        print(f"    · {tname}: logo + venue")
+
+    # B: Ảnh cầu thủ từ players đã cache
+    import glob
+    pages = [k for k in _list_bronze_keys(f"bronze/api_football/players/season={SEASON}/")]
+    for pk in pages:
+        try:
+            pbody = read_json_gz(pk)
+        except Exception:
+            continue
+        for item in pbody.get("response", []):
+            p = item.get("player", {})
+            pid = p.get("id")
+            photo_url = p.get("photo")
+            if pid and photo_url:
+                ext = os.path.splitext(urlparse(photo_url).path)[1].lower() or ".png"
+                mf = _fetch_binary(
+                    photo_url,
+                    f"bronze/api_football/media/entity=player/player_id={pid}/photo{ext}",
+                    "player", pid, "photo"
+                )
+                if mf:
+                    manifest.append(mf)
+
+    print(f"  ✓ {len(manifest)} files media -> bronze")
+    return manifest
+
+
+def _list_bronze_keys(prefix: str) -> list:
+    """List tất cả object keys dưới prefix trong MinIO."""
+    paginator = S3.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            keys.append(obj["Key"])
+    return keys
 
 
 def ingest_fixture_details(fixtures: dict, done: set) -> set:
@@ -356,6 +536,94 @@ def build_silver_top_scorers(body: dict):
         print(f"  ✓ {len(df)} top scorers -> silver")
 
 
+# ─── SILVER: players + media manifest ────────────────────────────────────────
+def build_silver_players():
+    """Gộp tất cả pages players -> silver parquet."""
+    rows = []
+    for pk in _list_bronze_keys(f"bronze/api_football/players/season={SEASON}/"):
+        try:
+            body = read_json_gz(pk)
+        except Exception:
+            continue
+        for item in body.get("response", []):
+            p = item.get("player", {})
+            s = item["statistics"][0] if item.get("statistics") else {}
+            rows.append({
+                "player_id":    p.get("id"),
+                "name":         p.get("name"),
+                "firstname":    p.get("firstname"),
+                "lastname":     p.get("lastname"),
+                "age":          p.get("age"),
+                "nationality":  p.get("nationality"),
+                "height":       p.get("height"),
+                "weight":       p.get("weight"),
+                "photo_url":    p.get("photo"),
+                "team_id":      (s.get("team") or {}).get("id"),
+                "team":         (s.get("team") or {}).get("name"),
+                "position":     (s.get("games") or {}).get("position"),
+                "appearances":  (s.get("games") or {}).get("appearences"),
+                "minutes":      (s.get("games") or {}).get("minutes"),
+                "goals":        (s.get("goals") or {}).get("total"),
+                "assists":      (s.get("goals") or {}).get("assists"),
+                "yellow_cards": (s.get("cards") or {}).get("yellow"),
+                "red_cards":    (s.get("cards") or {}).get("red"),
+                "shots_total":  (s.get("shots") or {}).get("total"),
+                "shots_on":     (s.get("shots") or {}).get("on"),
+                "passes_total": (s.get("passes") or {}).get("total"),
+                "passes_key":   (s.get("passes") or {}).get("key"),
+                "dribbles_att": (s.get("dribbles") or {}).get("attempts"),
+                "dribbles_ok":  (s.get("dribbles") or {}).get("success"),
+                "rating":       (s.get("games") or {}).get("rating"),
+            })
+    if rows:
+        df = pd.DataFrame(rows)
+        df["ingest_date"] = D
+        put_parquet(
+            f"silver/players/af_players/season={SEASON}/ingest_date={D}/part-0.parquet",
+            df, SRC, meta={"rows": len(df)}
+        )
+        print(f"  ✓ {len(df)} players -> silver")
+
+
+def build_silver_media_manifest(manifest: list):
+    """Lưu manifest ảnh (path + sha256 + metadata) -> silver parquet."""
+    if not manifest:
+        return
+    df = pd.DataFrame(manifest)
+    put_parquet(
+        f"silver/media/af_media_manifest/ingest_date={D}/part-0.parquet",
+        df, SRC, meta={"rows": len(df)}
+    )
+    print(f"  ✓ {len(df)} media entries -> silver manifest")
+
+
+def build_silver_injuries(body: dict):
+    """Chấn thương -> silver."""
+    rows = []
+    for item in body.get("response", []):
+        p  = item.get("player", {})
+        tm = item.get("team", {})
+        fx = item.get("fixture", {})
+        rows.append({
+            "player_id":   p.get("id"),
+            "player":      p.get("name"),
+            "type":        p.get("type"),
+            "reason":      p.get("reason"),
+            "team_id":     tm.get("id"),
+            "team":        tm.get("name"),
+            "fixture_id":  fx.get("id"),
+            "fixture_date": fx.get("date"),
+        })
+    if rows:
+        df = pd.DataFrame(rows)
+        df["ingest_date"] = D
+        put_parquet(
+            f"silver/players/af_injuries/season={SEASON}/ingest_date={D}/part-0.parquet",
+            df, SRC, meta={"rows": len(df)}
+        )
+        print(f"  ✓ {len(df)} injuries -> silver")
+
+
 # ─────────────────── MAIN ────────────────────────────────────────────────
 def run_pipeline():
     if not API_KEY:
@@ -365,33 +633,46 @@ def run_pipeline():
     print(f"=== p24: API-Football Full Pipeline (budget={DAILY_BUDGET} req) ===\n")
 
     # ── BRONZE ──
-    print("[1/7] Teams & Venues")
+    print("[1/9] Teams & Venues")
     teams_body = ingest_teams()
 
-    print("\n[2/7] Standings")
+    print("\n[2/9] Standings")
     standings_body = ingest_standings()
 
-    print("\n[3/7] Fixtures (380 trận)")
+    print("\n[3/9] Fixtures (380 trận)")
     fixtures_body = ingest_fixtures()
 
-    print("\n[4/7] Top Scorers")
-    scorers_body = ingest_top_scorers()
+    print("\n[4/9] Top Scorers + Assists + Yellow + Red cards")
+    scorers_body   = ingest_top_scorers()
+    assists_body   = ingest_top_assists()
+    yellow_body    = ingest_top_yellow_cards()
+    red_body       = ingest_top_red_cards()
 
-    print("\n[5/7] Fixture Details (Events + Lineups + Statistics)")
+    print("\n[5/9] Injuries")
+    injuries_body = ingest_injuries()
+
+    print("\n[6/9] Players (1 page/ngày, tích lũy)")
+    ingest_players_squad()
+
+    print("\n[7/9] Fixture Details (Events + Lineups + Statistics)")
     done = load_checkpoint()
     done = ingest_fixture_details(fixtures_body, done)
     save_checkpoint(done)
 
+    print("\n[8/9] Binary Media (logo + venue + player photos — không tốn quota API)")
+    manifest = ingest_media_binary(teams_body)
+
     # ── SILVER ──
-    print("\n[6/7] Build Silver — Fixtures & Standings & Scorers")
+    print("\n[9/9] Build Silver")
     build_silver_fixtures(fixtures_body)
     build_silver_standings(standings_body)
     build_silver_top_scorers(scorers_body)
-
-    print("\n[7/7] Build Silver — Match Details (Events + Lineups + Stats)")
     build_silver_events(done)
     build_silver_lineups(done)
     build_silver_stats(done)
+    build_silver_players()
+    build_silver_media_manifest(manifest)
+    build_silver_injuries(injuries_body)
 
     # ── SUMMARY ──
     print("\n=== SUMMARY ===")
@@ -399,6 +680,7 @@ def run_pipeline():
     summary("silver/matches/af_")
     summary("silver/standings/af_")
     summary("silver/players/af_")
+    summary("silver/media/af_")
 
 
 if __name__ == "__main__":
