@@ -23,5 +23,5 @@ with DAG(
 
     run_pipeline = BashOperator(
         task_id='run_p25_pipeline',
-        bash_command='python /opt/airflow/pipelines/p25/main.py',
+        bash_command='python /opt/project/pipelines/p25/main.py',
     )
