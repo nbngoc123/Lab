@@ -17,7 +17,7 @@ SRC = "understat"
 D   = today()
 
 # Tất cả 6 giải Understat hỗ trợ
-LEAGUES = ["EPL", "La_liga", "Bundesliga", "Serie_A", "Ligue_1", "RFPL"]
+LEAGUES = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1", "RFPL"]
 SEASON  = "2025"   # năm bắt đầu mùa 2025/26
 
 # TEST_MODE: True = chỉ lấy EPL (nhanh)

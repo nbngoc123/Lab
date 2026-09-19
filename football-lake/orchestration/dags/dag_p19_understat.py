@@ -46,7 +46,7 @@ with DAG(
         summary("silver/players/understat_player_xg/")
         summary("silver/teams/understat_team_xg/")
 
-    LEAGUES = ["EPL", "La_liga", "Bundesliga", "Serie_A", "Ligue_1"]
+    LEAGUES = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"]
 
     all_tasks = []
     for league in LEAGUES:
