@@ -27,8 +27,8 @@ YT_QUERIES = [
     "Bóng đá Việt Nam highlight"
 ]
 
-MAX_VIDEOS_PER_QUERY = 5
-MAX_COMMENTS_PER_VIDEO = 50
+MAX_VIDEOS_PER_QUERY = 20
+MAX_COMMENTS_PER_VIDEO = 300
 
 # ---------------------------------------------------------------------------
 # Helpers

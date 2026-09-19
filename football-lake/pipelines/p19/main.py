@@ -22,11 +22,11 @@ SEASON  = "2025"   # năm bắt đầu mùa 2025/26
 
 # TEST_MODE: True = chỉ lấy EPL (nhanh)
 # False = lấy cả 6 giải
-TEST_MODE = True
+TEST_MODE = False
 
 # Số trận cào shot data (1 request/trận, tốn nhiều lời gọi hơn)
 # Đặt 0 để tắt hoàn toàn, tăng dần theo tuần
-MAX_SHOT_MATCHES = 0
+MAX_SHOT_MATCHES = 1000
 
 
 def get_client():
