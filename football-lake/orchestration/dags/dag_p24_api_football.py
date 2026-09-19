@@ -1,11 +1,6 @@
-"""
-DAG p24: API-Football Full Pipeline
-Schedule: @daily
-Thay thế hoàn toàn p02 — lấy toàn bộ data EPL từ API-Sports.
-"""
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.decorators import task
 
 default_args = {
     'owner': 'airflow',
@@ -25,7 +20,9 @@ with DAG(
     tags=['football_lake', 'api_football', 'epl'],
 ) as dag:
 
-    run_pipeline = BashOperator(
-        task_id='run_p24_full_pipeline',
-        bash_command='python /opt/project/pipelines/p24/main.py',
-    )
+    @task
+    def run_p24_full_pipeline():
+        from pipelines.p24.main import run_pipeline
+        run_pipeline()
+
+    run_p24_full_pipeline()

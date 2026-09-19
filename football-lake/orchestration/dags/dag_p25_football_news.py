@@ -1,12 +1,11 @@
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.decorators import task
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'email_on_failure': False,
-    'email_on_retry': False,
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -18,10 +17,12 @@ with DAG(
     schedule='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['football_lake', 'news'],
+    tags=['football_lake', 'news', 'daily'],
 ) as dag:
 
-    run_pipeline = BashOperator(
-        task_id='run_p25_pipeline',
-        bash_command='python /opt/project/pipelines/p25/main.py',
-    )
+    @task
+    def run_p25_pipeline():
+        from pipelines.p25.main import run_pipeline
+        run_pipeline()
+
+    run_p25_pipeline()
