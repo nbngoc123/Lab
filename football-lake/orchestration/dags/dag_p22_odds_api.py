@@ -13,7 +13,7 @@ with DAG(
     'p22_odds_api',
     default_args=default_args,
     description='Ingest betting odds from The Odds API (Hourly)',
-    schedule_interval='@hourly',
+    schedule='@hourly',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['betting', 'odds', 'hourly', 'p22'],

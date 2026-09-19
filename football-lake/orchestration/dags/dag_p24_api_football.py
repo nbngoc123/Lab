@@ -19,7 +19,7 @@ with DAG(
     'dag_p24_api_football',
     default_args=default_args,
     description='API-Football Full: Teams, Standings, Fixtures, Events, Lineups, Stats, Top Scorers',
-    schedule_interval='@daily',
+    schedule='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['football_lake', 'api_football', 'epl'],

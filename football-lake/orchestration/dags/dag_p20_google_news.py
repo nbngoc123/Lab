@@ -13,7 +13,7 @@ with DAG(
     'p20_google_news_rss',
     default_args=default_args,
     description='Ingest Google News RSS (Daily)',
-    schedule_interval='@daily',
+    schedule='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['nlp', 'text', 'daily', 'p20', 'rss'],

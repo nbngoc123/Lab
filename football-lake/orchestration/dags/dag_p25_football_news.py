@@ -15,7 +15,7 @@ with DAG(
     'dag_p25_football_news',
     default_args=default_args,
     description='Cào tin tức từ Football News Aggregator (RapidAPI)',
-    schedule_interval='@daily',
+    schedule='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['football_lake', 'news'],

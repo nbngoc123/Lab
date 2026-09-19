@@ -13,7 +13,7 @@ with DAG(
     'p20_wikipedia_text',
     default_args=default_args,
     description='Ingest Wikipedia football articles (Weekly)',
-    schedule_interval='@weekly',
+    schedule='@weekly',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['nlp', 'text', 'weekly', 'p20'],
