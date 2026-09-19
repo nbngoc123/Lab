@@ -94,8 +94,13 @@ def ingest_teams_for_league(league_name: str, league_slug: str) -> list:
     if exists(key):
         from lake.minio_io import read_json_gz
         return read_json_gz(key).get("teams") or []
-    r = SESSION.get(f"{BASE}/search_all_teams.php", params={"l": league_name})
-    body = r.json()
+    try:
+        r = SESSION.get(f"{BASE}/search_all_teams.php", params={"l": league_name})
+        r.raise_for_status()
+        body = r.json()
+    except Exception as e:
+        print(f"    ! Lỗi API tải teams cho giải {league_slug}: {e}")
+        return []
     teams = body.get("teams") or []
     if teams:
         put_json_gz(key, body, SRC, meta={"league": league_slug, "teams": len(teams)})
@@ -108,8 +113,13 @@ def ingest_players_for_team(team_id: str) -> list:
     if exists(key):
         from lake.minio_io import read_json_gz
         return read_json_gz(key).get("player") or []
-    r = SESSION.get(f"{BASE}/lookup_all_players.php", params={"id": team_id})
-    body = r.json()
+    try:
+        r = SESSION.get(f"{BASE}/lookup_all_players.php", params={"id": team_id})
+        r.raise_for_status()
+        body = r.json()
+    except Exception as e:
+        print(f"    ! Lỗi API tải players cho team {team_id}: {e}")
+        return []
     players = body.get("player") or []
     if players:
         put_json_gz(key, body, SRC, meta={"team_id": team_id, "players": len(players)})
