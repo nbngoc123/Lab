@@ -22,23 +22,36 @@ def explore_silver():
     print(f"Tổng số file: {len(keys)}")
     print(f"Tổng dung lượng: {total_size / 1e6:.2f} MB\n")
     
-    # Gom nhóm theo loại thư mục (dim, matches, players, standings...)
-    categories = {}
+    print("=== CHI TIẾT TỪNG FILE TRONG SILVER LAYER ===\n")
+    import io
+    import pandas as pd
+    from lake.minio_io import read_bytes
+    
     for k, size in keys:
-        parts = k.split("/")
-        if len(parts) >= 3:
-            # silver/dim/wd_clubs/... -> category = "dim/wd_clubs"
-            category = f"{parts[1]}/{parts[2]}"
-            if category not in categories:
-                categories[category] = {"count": 0, "size": 0}
-            categories[category]["count"] += 1
-            categories[category]["size"] += size
+        if not k.endswith(".parquet"):
+            continue
             
-    print("=== CHI TIẾT CÁC BẢNG TRONG SILVER ===")
-    for cat, stats in sorted(categories.items()):
-        print(f"[{cat.upper()}]")
-        print(f"  - Số file: {stats['count']}")
-        print(f"  - Dung lượng: {stats['size'] / 1e3:.1f} KB")
+        print(f"[{k}]")
+        print(f"  - Size: {size / 1024:.2f} KB")
+        try:
+            # Tải file parquet và đọc metadata
+            data = read_bytes(k)
+            df = pd.read_parquet(io.BytesIO(data))
+            
+            print(f"  - Shape: {df.shape[0]} rows x {df.shape[1]} columns")
+            print(f"  - Columns: {', '.join(df.columns.tolist())}")
+            if not df.empty:
+                print("  - Sample (row 1):")
+                sample = df.head(1).to_dict('records')[0]
+                # Cắt ngắn chuỗi nếu quá dài
+                for key, val in sample.items():
+                    val_str = str(val)
+                    if len(val_str) > 60:
+                        val_str = val_str[:57] + "..."
+                    print(f"      {key}: {val_str}")
+        except Exception as e:
+            print(f"  - Error reading file: {e}")
+        print("-" * 60)
 
 if __name__ == "__main__":
     explore_silver()
