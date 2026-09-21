@@ -27,7 +27,7 @@ TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 # Số trận cào shot data (1 request/trận, tốn nhiều lời gọi hơn)
 # Đặt 0 để tắt hoàn toàn, tăng dần theo tuần
-MAX_SHOT_MATCHES = 1000
+MAX_SHOT_MATCHES = 3 if TEST_MODE else 1000
 
 
 def get_client():
