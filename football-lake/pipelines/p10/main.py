@@ -32,7 +32,7 @@ END   = date.today().strftime("%Y%m%d")
 
 # True = chỉ lấy 3 đội + 3 cầu thủ để test nhanh
 # False = chạy full (có thể mất 10-20 phút)
-TEST_MODE = False
+TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 # ---------------------------------------------------------------------------
 # Seed lists (hardcoded - đảm bảo chính xác)
