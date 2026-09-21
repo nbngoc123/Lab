@@ -1,0 +1,16 @@
+# SSH Config cho Azure VM Data
+# Usage: ssh vm
+
+Host vm
+    HostName 20.41.113.183
+    User azureuser
+    IdentityFile C:\Users\ADMIN\.ssh\RIPT.pem
+    # Port forwarding: truy cập từ laptop
+    LocalForward 3000 localhost:3000
+    LocalForward 8080 localhost:8080
+    LocalForward 9000 localhost:9000
+    LocalForward 9001 localhost:9001
+    LocalForward 5432 localhost:5432
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    StrictHostKeyChecking no
