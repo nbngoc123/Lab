@@ -23,7 +23,8 @@ with DAG(
 ) as dag:
     
     # Định nghĩa môi trường test
-    env_vars = {"TEST_MODE": "1", "PYTHONPATH": "/opt/project"}
+    env_vars = os.environ.copy()
+    env_vars.update({"TEST_MODE": "1", "PYTHONPATH": "/opt/project"})
     
     # Các task chạy tuần tự (tránh song song gây OOM)
     # Lưu ý: Các pipeline được gọi qua BashOperator để giải phóng bộ nhớ (RAM) ngay sau khi chạy xong
