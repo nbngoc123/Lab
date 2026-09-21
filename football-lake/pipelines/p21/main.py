@@ -28,7 +28,8 @@ YT_QUERIES = [
 ]
 
 MAX_VIDEOS_PER_QUERY = 20
-MAX_COMMENTS_PER_VIDEO = 300
+MAX_COMMENTS_PER_VIDEO = 100   # Issue #8: giới hạn thực tế của API là 100
+MAX_COMMENT_PAGES = 3          # tối đa 3 trang × 100 = 300 comments/video
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +62,7 @@ def ingest_youtube():
     
     for q in YT_QUERIES:
         print(f"\n  [YT] Search: {q}")
-        safe_q = re.sub(r"[^a-zA-Z0-9]+", "_", q).strip("_")
+        safe_q = re.sub(r"[\W]+", "_", q, flags=re.UNICODE).strip("_")  # Issue C: giữ Unicode
         search_url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={urllib.parse.quote(q)}&type=video&maxResults={MAX_VIDEOS_PER_QUERY}&key={api_key}"
         
         try:
@@ -84,21 +85,34 @@ def ingest_youtube():
                     "channel_title": snippet["channelTitle"]
                 })
                 
-                # Fetch comments for this video
-                cmt_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={vid_id}&maxResults={MAX_COMMENTS_PER_VIDEO}&key={api_key}"
-                cmt_resp = get(cmt_url).json()
-                
+                # Fetch comments — Issue #8: pagination + error check
                 cmts = []
-                for c_item in cmt_resp.get("items", []):
-                    c_snippet = c_item["snippet"]["topLevelComment"]["snippet"]
-                    cmts.append({
-                        "comment_id": c_item["id"],
-                        "video_id": vid_id,
-                        "author": c_snippet.get("authorDisplayName", ""),
-                        "text": c_snippet.get("textOriginal", ""),
-                        "like_count": c_snippet.get("likeCount", 0),
-                        "published_at": c_snippet.get("publishedAt", "")
-                    })
+                page_token = ""
+                for _page in range(MAX_COMMENT_PAGES):
+                    cmt_url = (
+                        f"https://www.googleapis.com/youtube/v3/commentThreads"
+                        f"?part=snippet&videoId={vid_id}"
+                        f"&maxResults={MAX_COMMENTS_PER_VIDEO}&key={api_key}"
+                        + (f"&pageToken={page_token}" if page_token else "")
+                    )
+                    cmt_resp = get(cmt_url).json()
+                    if "error" in cmt_resp:
+                        print(f"    ! Comment API lỗi cho {vid_id}: "
+                              f"{cmt_resp['error'].get('message', '')}")
+                        break
+                    for c_item in cmt_resp.get("items", []):
+                        c_snippet = c_item["snippet"]["topLevelComment"]["snippet"]
+                        cmts.append({
+                            "comment_id": c_item["id"],
+                            "video_id": vid_id,
+                            "author": c_snippet.get("authorDisplayName", ""),
+                            "text": c_snippet.get("textOriginal", ""),
+                            "like_count": c_snippet.get("likeCount", 0),
+                            "published_at": c_snippet.get("publishedAt", "")
+                        })
+                    page_token = cmt_resp.get("nextPageToken", "")
+                    if not page_token:
+                        break
                 
                 if cmts:
                     put_jsonl_gz(

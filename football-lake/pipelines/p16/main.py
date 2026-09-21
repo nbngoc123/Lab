@@ -98,3 +98,25 @@ def build_injury_frequency(t3_raw: list) -> pd.DataFrame:
         f"silver/dim/pr_injury_type_frequency/ingest_date={D}/part-0.parquet",
         df, SRC)
     return df
+
+
+def run_pipeline():
+    print("[1/3] Bronze: tải trang PhysioRoom")
+    html = fetch_page()
+
+    print("[2/3] Bronze: parse bảng")
+    tables = parse_tables(html)
+
+    print("[3/3] Silver: build dim tables")
+    build_club_summary(tables[0])
+    build_player_injuries(tables[1])
+    build_injury_frequency(tables[3])
+
+    summary("bronze/physioroom/")
+    summary("silver/dim/pr_")
+    summary("silver/players/pr_")
+
+
+if __name__ == "__main__":
+    run_pipeline()
+

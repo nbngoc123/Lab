@@ -9,7 +9,7 @@ D = today()
 ENDPOINT = "https://query.wikidata.org/sparql"
 
 # Wikidata yêu cầu UA mô tả rõ — thiếu cái này sẽ bị 403
-UA = "football-lake/0.1 (educational data engineering project; contact: you@example.com)"
+UA = "football-lake/0.1 (educational data engineering project; contact: admin@football-lake.local)"
 
 
 QUERIES = {
@@ -29,14 +29,17 @@ WHERE {
 }
 """,
 
-    # ---- Cầu thủ đang thuộc các CLB PL ----
+    # ---- Cầu thủ đang thuộc các CLB PL (lọc theo P582 end time để tránh lấy alumni) ----
     "pl_players": """
 SELECT ?player ?playerLabel ?clubLabel ?dob ?height
        ?countryLabel ?positionLabel ?sexLabel
 WHERE {
   ?club   wdt:P118 wd:Q9448 .
-  ?player wdt:P54  ?club .
-  ?player wdt:P106 wd:Q937857 .                  # nghề: cầu thủ bóng đá
+  # P54 = member of sports team, chỉ lấy membership chưa có end date (vẫn đang thi đấu)
+  ?player p:P54 ?membership .
+  ?membership ps:P54 ?club .
+  FILTER NOT EXISTS { ?membership pq:P582 ?endTime }   # không có end time
+  ?player wdt:P106 wd:Q937857 .                        # nghề: cầu thủ bóng đá
   OPTIONAL { ?player wdt:P569  ?dob }
   OPTIONAL { ?player wdt:P2048 ?height }
   OPTIONAL { ?player wdt:P27   ?country }
@@ -44,7 +47,6 @@ WHERE {
   OPTIONAL { ?player wdt:P21   ?sex }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 }
-LIMIT 50 # Test nhanh: giới hạn 50 cầu thủ thay vì 5000
 """,
 
     # ---- Sân vận động + tọa độ ----

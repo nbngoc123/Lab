@@ -5,12 +5,18 @@ import pandas as pd
 from lake.minio_io import (put_bytes, put_parquet, read_bytes, exists,
                            summary, S3, BUCKET)
 from lake.http import get
+from lake.team_lookup import add_team_key
 
 SRC = "football-data.co.uk"
 BASE = "https://www.football-data.co.uk/mmz4281"
 
-DIVISIONS = ["E0"]        # Test nhanh: chỉ lấy Ngoại Hạng Anh
-SEASONS = ["2425"]        # Test nhanh: chỉ lấy mùa hiện tại
+# Backfill 10 mùa EPL + Championship
+# Mã mùa: "1516" = 2015/16, "2425" = 2024/25
+DIVISIONS = ["E0", "E1"]   # E0=EPL, E1=Championship
+SEASONS = [
+    "1516", "1617", "1718", "1819", "1920",
+    "2021", "2122", "2223", "2324", "2425",
+]
 
 CORE = ["Div", "Date", "Time", "HomeTeam", "AwayTeam",
         "FTHG", "FTAG", "FTR", "HTHG", "HTAG", "HTR",
@@ -18,6 +24,11 @@ CORE = ["Div", "Date", "Time", "HomeTeam", "AwayTeam",
         "HY", "AY", "HR", "AR", "Referee"]
 
 ODDS_BOOKS = ["B365", "BW", "IW", "PS", "WH", "VC", "Avg", "Max"]
+
+
+def _season_label(raw: str) -> str:
+    """'2425' → '2024-25' (định dạng chuẩn toàn hệ thống)."""
+    return f"20{raw[:2]}-{raw[2:]}"
 
 
 # ---------- BRONZE ----------
@@ -108,14 +119,15 @@ def build_matches(keys: dict):
         out = df.reindex(columns=CORE).copy()
         out["Date"] = _parse_date(out["Date"])
         out["division"] = div
-        out["season"] = f"20{season[:2]}-{season[2:]}"
+        season_label = _season_label(season)
+        out["season"] = season_label
 
         for c in ["FTHG", "FTAG", "HTHG", "HTAG", "HS", "AS", "HST", "AST",
                   "HC", "AC", "HY", "AY", "HR", "AR"]:
             out[c] = pd.to_numeric(out[c], errors="coerce").astype("Int64")
 
         out["total_goals"] = out["FTHG"] + out["FTAG"]
-        out["match_id"] = (out["division"] + "_" + out["season"] + "_"
+        out["match_id"] = (out["division"] + "_" + season_label + "_"
                            + out["Date"].dt.strftime("%Y%m%d") + "_"
                            + out["HomeTeam"].str.replace(" ", "")
                            + "_" + out["AwayTeam"].str.replace(" ", ""))
@@ -125,9 +137,13 @@ def build_matches(keys: dict):
             "AwayTeam": "away_team", "FTHG": "home_goals",
             "FTAG": "away_goals", "FTR": "result"})
 
+        # Thêm team_key chuẩn để join với các nguồn khác
+        out = add_team_key(out, "home_team", source="fd", out_col="home_team_key")
+        out = add_team_key(out, "away_team", source="fd", out_col="away_team_key")
+
         put_parquet(
-            f"silver/matches/fd_matches/division={div}/season={season}/part-0.parquet",
-            out, SRC, meta={"division": div, "season": season})
+            f"silver/matches/fd_matches/division={div}/season={season_label}/part-0.parquet",
+            out, SRC, meta={"division": div, "season": season_label})
 
 
 def build_odds(keys: dict):
@@ -136,16 +152,21 @@ def build_odds(keys: dict):
         df = _read_csv(key).dropna(subset=["HomeTeam", "AwayTeam"])
         if df.empty:
             continue
+        season_label = _season_label(season)
         date = _parse_date(df["Date"])
-        mid = (div + "_20" + season[:2] + "-" + season[2:] + "_"
+        mid = (div + "_" + season_label + "_"
                + date.dt.strftime("%Y%m%d") + "_"
                + df["HomeTeam"].str.replace(" ", "") + "_"
                + df["AwayTeam"].str.replace(" ", ""))
 
         rows = []
+        missing_books = []
         for book in ODDS_BOOKS:
             cols = [f"{book}H", f"{book}D", f"{book}A"]
-            if not all(c in df.columns for c in cols):
+            present = [c for c in cols if c in df.columns]
+            if len(present) < 3:
+                # Issue #5: log rõ ràng thay vì im lặng bỏ qua
+                missing_books.append(book)
                 continue
             part = pd.DataFrame({
                 "match_id": mid,
@@ -156,6 +177,8 @@ def build_odds(keys: dict):
             })
             rows.append(part.dropna(subset=["odds_home"]))
 
+        if missing_books:
+            print(f"  ⚠ {div}/{season_label}: thiếu cột odds cho: {missing_books}")
         if not rows:
             continue
         odds = pd.concat(rows, ignore_index=True)
@@ -164,7 +187,7 @@ def build_odds(keys: dict):
             1/odds.odds_home + 1/odds.odds_draw + 1/odds.odds_away - 1).round(4)
 
         put_parquet(
-            f"silver/odds/fd_odds/division={div}/season={season}/part-0.parquet",
+            f"silver/odds/fd_odds/division={div}/season={season_label}/part-0.parquet",
             odds, SRC)
 
 

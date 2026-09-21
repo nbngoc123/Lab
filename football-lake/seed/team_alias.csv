@@ -1,0 +1,151 @@
+source,alias,team_key
+# === EPL 2024-25 ===
+fd,Arsenal,Arsenal
+fd,Aston Villa,Aston Villa
+fd,Bournemouth,Bournemouth
+fd,Brentford,Brentford
+fd,Brighton,Brighton
+fd,Chelsea,Chelsea
+fd,Crystal Palace,Crystal Palace
+fd,Everton,Everton
+fd,Fulham,Fulham
+fd,Ipswich,Ipswich Town
+fd,Leicester,Leicester City
+fd,Liverpool,Liverpool
+fd,Man City,Manchester City
+fd,Man United,Manchester United
+fd,Newcastle,Newcastle United
+fd,Nott'm Forest,Nottingham Forest
+fd,Southampton,Southampton
+fd,Spurs,Tottenham Hotspur
+fd,West Ham,West Ham United
+fd,Wolves,Wolverhampton
+# football-data.co.uk (historical, mùa cũ)
+fd,Tottenham,Tottenham Hotspur
+fd,Manchester City,Manchester City
+fd,Manchester United,Manchester United
+fd,Nottingham Forest,Nottingham Forest
+fd,Leeds,Leeds United
+fd,Norwich,Norwich City
+fd,Burnley,Burnley
+fd,Watford,Watford
+fd,Sheffield United,Sheffield United
+fd,Huddersfield,Huddersfield Town
+# === API-Football / Understat ===
+apifootball,Arsenal FC,Arsenal
+apifootball,Chelsea FC,Chelsea
+apifootball,Liverpool FC,Liverpool
+apifootball,Manchester City,Manchester City
+apifootball,Manchester United,Manchester United
+apifootball,Newcastle United,Newcastle United
+apifootball,Tottenham Hotspur,Tottenham Hotspur
+apifootball,Aston Villa,Aston Villa
+apifootball,West Ham United,West Ham United
+apifootball,Wolverhampton Wanderers,Wolverhampton
+apifootball,Brighton & Hove Albion,Brighton
+apifootball,Brentford FC,Brentford
+apifootball,Fulham FC,Fulham
+apifootball,Crystal Palace,Crystal Palace
+apifootball,Nottingham Forest,Nottingham Forest
+apifootball,Everton FC,Everton
+apifootball,Bournemouth,Bournemouth
+apifootball,Leicester City,Leicester City
+apifootball,Ipswich Town,Ipswich Town
+apifootball,Southampton FC,Southampton
+understat,Arsenal,Arsenal
+understat,Chelsea,Chelsea
+understat,Liverpool,Liverpool
+understat,Manchester City,Manchester City
+understat,Manchester United,Manchester United
+understat,Newcastle United,Newcastle United
+understat,Tottenham,Tottenham Hotspur
+understat,Aston Villa,Aston Villa
+understat,West Ham,West Ham United
+understat,Wolverhampton Wanderers,Wolverhampton
+understat,Brighton,Brighton
+understat,Brentford,Brentford
+understat,Fulham,Fulham
+understat,Crystal Palace,Crystal Palace
+understat,Nottingham Forest,Nottingham Forest
+understat,Everton,Everton
+understat,Bournemouth,Bournemouth
+understat,Leicester,Leicester City
+understat,Ipswich,Ipswich Town
+understat,Southampton,Southampton
+# === Open-Meteo venue_map ===
+openmeteo,Emirates Stadium,Arsenal
+openmeteo,Anfield,Liverpool
+openmeteo,City of Manchester Stadium,Manchester City
+openmeteo,Old Trafford,Manchester United
+openmeteo,Stamford Bridge,Chelsea
+openmeteo,Tottenham Hotspur Stadium,Tottenham Hotspur
+openmeteo,St. James' Park,Newcastle United
+openmeteo,Villa Park,Aston Villa
+openmeteo,London Stadium,West Ham United
+openmeteo,Molineux Stadium,Wolverhampton
+openmeteo,Amex Stadium,Brighton
+openmeteo,Brentford Community Stadium,Brentford
+openmeteo,Craven Cottage,Fulham
+openmeteo,Selhurst Park,Crystal Palace
+openmeteo,City Ground,Nottingham Forest
+openmeteo,Goodison Park,Everton
+openmeteo,Vitality Stadium,Bournemouth
+openmeteo,King Power Stadium,Leicester City
+openmeteo,Portman Road,Ipswich Town
+openmeteo,St Mary's Stadium,Southampton
+# === TheSportsDB ===
+thesportsdb,Arsenal,Arsenal
+thesportsdb,Chelsea,Chelsea
+thesportsdb,Liverpool,Liverpool
+thesportsdb,Manchester City,Manchester City
+thesportsdb,Manchester United,Manchester United
+thesportsdb,Newcastle United,Newcastle United
+thesportsdb,Tottenham Hotspur,Tottenham Hotspur
+# === Wikidata ===
+wikidata,Arsenal F.C.,Arsenal
+wikidata,Chelsea F.C.,Chelsea
+wikidata,Liverpool F.C.,Liverpool
+wikidata,Manchester City F.C.,Manchester City
+wikidata,Manchester United F.C.,Manchester United
+wikidata,Newcastle United F.C.,Newcastle United
+wikidata,Tottenham Hotspur F.C.,Tottenham Hotspur
+wikidata,Aston Villa F.C.,Aston Villa
+wikidata,West Ham United F.C.,West Ham United
+wikidata,Wolverhampton Wanderers F.C.,Wolverhampton
+wikidata,Brighton & Hove Albion F.C.,Brighton
+wikidata,Brentford F.C.,Brentford
+wikidata,Fulham F.C.,Fulham
+wikidata,Crystal Palace F.C.,Crystal Palace
+wikidata,Nottingham Forest F.C.,Nottingham Forest
+wikidata,Everton F.C.,Everton
+wikidata,A.F.C. Bournemouth,Bournemouth
+wikidata,Leicester City F.C.,Leicester City
+wikidata,Ipswich Town F.C.,Ipswich Town
+wikidata,Southampton F.C.,Southampton
+# === Reddit / Odds API (tên tự do) ===
+reddit,Arsenal,Arsenal
+reddit,Chelsea,Chelsea
+reddit,Liverpool,Liverpool
+reddit,Man City,Manchester City
+reddit,Man United,Manchester United
+reddit,Spurs,Tottenham Hotspur
+odds,Arsenal,Arsenal
+odds,Chelsea,Chelsea
+odds,Liverpool,Liverpool
+odds,Manchester City,Manchester City
+odds,Manchester United,Manchester United
+odds,Tottenham Hotspur,Tottenham Hotspur
+odds,Aston Villa,Aston Villa
+odds,West Ham United,West Ham United
+odds,Wolverhampton Wanderers,Wolverhampton
+odds,Brighton and Hove Albion,Brighton
+odds,Brentford,Brentford
+odds,Fulham,Fulham
+odds,Crystal Palace,Crystal Palace
+odds,Nottingham Forest,Nottingham Forest
+odds,Everton,Everton
+odds,Bournemouth,Bournemouth
+odds,Leicester City,Leicester City
+odds,Ipswich Town,Ipswich Town
+odds,Southampton,Southampton
+odds,Newcastle United,Newcastle United
