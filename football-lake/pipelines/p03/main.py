@@ -6,14 +6,17 @@ from lake.minio_io import (put_bytes, put_parquet, read_bytes, exists,
                            summary, S3, BUCKET)
 from lake.http import get
 from lake.team_lookup import add_team_key
+import os
+
+TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 SRC = "football-data.co.uk"
 BASE = "https://www.football-data.co.uk/mmz4281"
 
 # Backfill 10 mùa EPL + Championship
 # Mã mùa: "1516" = 2015/16, "2425" = 2024/25
-DIVISIONS = ["E0", "E1"]   # E0=EPL, E1=Championship
-SEASONS = [
+DIVISIONS = ["E0"] if TEST_MODE else ["E0", "E1"]   # E0=EPL, E1=Championship
+SEASONS = ["2425"] if TEST_MODE else [
     "1516", "1617", "1718", "1819", "1920",
     "2021", "2122", "2223", "2324", "2425",
 ]

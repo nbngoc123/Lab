@@ -13,10 +13,12 @@ from datetime import datetime, timezone
 import urllib.parse
 
 import pandas as pd
-from lake.minio_io import put_bytes, put_parquet, today, summary
+from lake.minio_io import put_json_gz, put_parquet, today, summary
 from lake.http import get
 
-SRC_YT = "youtube-api"
+TEST_MODE = os.getenv("TEST_MODE") == "1"
+
+SRC = "youtube-api"
 D = today()
 
 YT_QUERIES = [
@@ -27,9 +29,9 @@ YT_QUERIES = [
     "Bóng đá Việt Nam highlight"
 ]
 
-MAX_VIDEOS_PER_QUERY = 20
-MAX_COMMENTS_PER_VIDEO = 100   # Issue #8: giới hạn thực tế của API là 100
-MAX_COMMENT_PAGES = 3          # tối đa 3 trang × 100 = 300 comments/video
+MAX_VIDEOS_PER_QUERY = 2 if TEST_MODE else 20
+MAX_COMMENTS_PER_VIDEO = 20 if TEST_MODE else 100   # Issue #8: giới hạn thực tế của API là 100
+MAX_COMMENT_PAGES = 1 if TEST_MODE else 3          # tối đa 3 trang × 100 = 300 comments/video
 
 # ---------------------------------------------------------------------------
 # Helpers

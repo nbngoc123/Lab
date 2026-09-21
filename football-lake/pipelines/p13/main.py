@@ -1,9 +1,12 @@
 """Ingest Open-Meteo: thời tiết lịch sử tại tọa độ sân, ghép với ngày thi đấu."""
+import os
 import time
 import pandas as pd
 from lake.minio_io import put_json_gz, put_parquet, read_bytes, today, summary
 from lake.http import get
 from lake.team_lookup import add_team_key
+
+TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 SRC = "open-meteo"
 D = today()
@@ -56,14 +59,19 @@ def load_stadiums() -> list:
     if "venueLabel" in df.columns:
         df = df.rename(columns={"venueLabel": "venue"})
     df = df[df.lat.notna() & df.lon.notna()]
-    # Issue #10: Bỏ head(2), lấy tất cả sân có tọa độ
     # Thêm team_key để join qua alias thay vì so chuỗi tên sân
     df = add_team_key(df, "venue", source="openmeteo", out_col="team_key")
+    if TEST_MODE:
+        df = df.head(2)
     return df.to_dict("records")
 
 
 def ingest_all_historical(stadiums: list, start="2024-08-01", end="2024-09-01"):
-    # Đổi start, end cho khoảng 1 tháng gần đây để test nhanh
+    """Dữ liệu lịch sử."""
+    if TEST_MODE:
+        start = "2024-08-01"
+        end = "2024-08-02"
+    print(f"  · Bắt đầu tải archive từ {start} đến {end}")
     results = {}
     for row in stadiums:
         venue = row["venue"]

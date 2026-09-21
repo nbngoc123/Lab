@@ -1,8 +1,11 @@
 """Ingest Wikidata qua SPARQL: dimension giàu cho lake bóng đá."""
 import time
 import pandas as pd
+import os
 from lake.minio_io import put_json_gz, put_parquet, today, summary, S3, BUCKET
 from lake.http import SESSION
+
+TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 SRC = "wikidata"
 D = today()
@@ -27,7 +30,7 @@ WHERE {
   OPTIONAL { ?club wdt:P856  ?websiteURL }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 }
-""",
+""" + ("LIMIT 50" if TEST_MODE else ""),
 
     # ---- Cầu thủ đang thuộc các CLB PL (lọc theo P582 end time để tránh lấy alumni) ----
     "pl_players": """
@@ -47,7 +50,7 @@ WHERE {
   OPTIONAL { ?player wdt:P21   ?sex }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 }
-""",
+""" + ("LIMIT 50" if TEST_MODE else ""),
 
     # ---- Sân vận động + tọa độ ----
     "pl_stadiums": """

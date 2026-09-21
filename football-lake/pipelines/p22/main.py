@@ -14,9 +14,10 @@ import pandas as pd
 from lake.minio_io import put_bytes, put_parquet, put_json_gz, today, summary
 from lake.http import get
 
+TEST_MODE = os.getenv("TEST_MODE") == "1"
+
 SRC = "the-odds-api"
 D = today()
-TEST_MODE = False
 
 def ingest_odds():
     api_key = os.getenv("ODDS_API_KEY")
