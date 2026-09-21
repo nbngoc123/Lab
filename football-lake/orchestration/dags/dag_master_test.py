@@ -27,7 +27,6 @@ with DAG(
     
     # Các task chạy tuần tự (tránh song song gây OOM)
     # Lưu ý: Các pipeline được gọi qua BashOperator để giải phóng bộ nhớ (RAM) ngay sau khi chạy xong
-    t_p03 = BashOperator(task_id="p03_football_data", bash_command="python /opt/project/pipelines/p03/main.py", env=env_vars)
     t_p06 = BashOperator(task_id="p06_wikidata", bash_command="python /opt/project/pipelines/p06/main.py", env=env_vars)
     t_p08 = BashOperator(task_id="p08_thesportsdb", bash_command="python /opt/project/pipelines/p08/main.py", env=env_vars)
     t_p09 = BashOperator(task_id="p09_api_football", bash_command="python /opt/project/pipelines/p09/main.py", env=env_vars)
@@ -41,4 +40,4 @@ with DAG(
     t_p25 = BashOperator(task_id="p25_news", bash_command="python /opt/project/pipelines/p25/main.py", env=env_vars)
     
     # Thiết lập chạy TUẦN TỰ: Từng task một để tiết kiệm RAM tối đa
-    t_p03 >> t_p06 >> t_p08 >> t_p09 >> t_p10 >> t_p13 >> t_p16 >> t_p19 >> t_p21 >> t_p22 >> t_p24 >> t_p25
+    t_p06 >> t_p08 >> t_p09 >> t_p10 >> t_p13 >> t_p16 >> t_p19 >> t_p21 >> t_p22 >> t_p24 >> t_p25
