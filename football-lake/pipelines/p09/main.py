@@ -18,7 +18,8 @@ if not TOKEN:
 HEADERS = {"X-Auth-Token": TOKEN}
 
 # 12 giải free tier hay dùng nhất; PL là trọng tâm của bộ 8 nguồn kia
-COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"]
+TEST_MODE = os.getenv("TEST_MODE") == "1"
+COMPETITIONS = ["PL"] if TEST_MODE else ["PL", "PD", "BL1", "SA", "FL1", "CL"]
 FOCUS = "PL"          # giải chính để build fact chi tiết
 
 

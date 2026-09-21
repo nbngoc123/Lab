@@ -13,7 +13,7 @@ from lake.http import get
 
 SRC = "football-news"
 D = today()
-TEST_MODE = False
+TEST_MODE = os.getenv("TEST_MODE") == "1"
 
 def put_json_gz(key: str, obj, source: str, meta=None):
     raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

@@ -31,7 +31,8 @@ SRC        = "api-football"
 D          = today()
 LEAGUE     = 39          # Premier League
 SEASON     = 2024        # 2024/2025
-DAILY_BUDGET = 80        # Giới hạn 80/100 req/ngày (giữ lại 20 dự phòng)
+TEST_MODE  = os.getenv("TEST_MODE") == "1"
+DAILY_BUDGET = 5 if TEST_MODE else 80        # Giới hạn 80/100 req/ngày (giữ lại 20 dự phòng)
 CHECKPOINT_KEY = "_meta/api_football_p24/checkpoint.json"
 
 API_KEY  = os.getenv("API_FOOTBALL_KEY", "")
