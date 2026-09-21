@@ -35,17 +35,10 @@ with DAG(
         ingest_forecast(stadiums)
 
     @task
-    def task_build_silver(results):
+    def task_build_silver(results, stadiums):
         from pipelines.p13.main import build_hourly_table, join_weather_to_matches
         weather_df = build_hourly_table(results)
-        
-        venue_map = {
-            "Arsenal": "Emirates Stadium", "Liverpool": "Anfield",
-            "Manchester City": "City of Manchester Stadium",
-            "Manchester United": "Old Trafford",
-            "Chelsea": "Stamford Bridge", "Tottenham": "Tottenham Hotspur Stadium",
-        }
-        join_weather_to_matches(weather_df, venue_map)
+        join_weather_to_matches(weather_df, stadiums)
 
     # 1. Load coordinates
     stadiums = task_load_stadiums()
@@ -55,4 +48,4 @@ with DAG(
     task_ingest_forecast(stadiums)
     
     # 3. Transform silver
-    task_build_silver(historical_results)
+    task_build_silver(historical_results, stadiums)
