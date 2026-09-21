@@ -16,7 +16,7 @@ with DAG(
     "master_pipeline_test_mode",
     default_args=default_args,
     description="Chạy toàn bộ Data Lake ở chế độ TEST (lấy ít dữ liệu) một cách tuần tự để tránh sập VM",
-    schedule_interval=None,
+    schedule=None,
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["test", "master"],
