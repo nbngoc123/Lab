@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import urllib.parse
 
 import pandas as pd
-from lake.minio_io import put_json_gz, put_parquet, today, summary
+from lake.minio_io import put_bytes, put_parquet, today, summary
 from lake.http import get
 
 TEST_MODE = os.getenv("TEST_MODE") == "1"
@@ -119,7 +119,7 @@ def ingest_youtube():
                 if cmts:
                     put_jsonl_gz(
                         f"bronze/youtube/comments/video_id={vid_id}/ingest_date={D}/comments.jsonl.gz",
-                        cmts, SRC_YT, meta={"video_id": vid_id, "count": len(cmts)}
+                        cmts, SRC, meta={"video_id": vid_id, "count": len(cmts)}
                     )
                     all_comments.extend(cmts)
                 time.sleep(0.5)
@@ -127,7 +127,7 @@ def ingest_youtube():
             if videos:
                 put_jsonl_gz(
                     f"bronze/youtube/videos/query={safe_q}/ingest_date={D}/videos.jsonl.gz",
-                    videos, SRC_YT, meta={"query": q, "count": len(videos)}
+                    videos, SRC, meta={"query": q, "count": len(videos)}
                 )
                 all_videos.extend(videos)
                 
@@ -148,7 +148,7 @@ def build_yt_silver(videos, comments):
         df_v["ingest_date"] = D
         put_parquet(
             f"silver/text/youtube_videos/ingest_date={D}/part-0.parquet",
-            df_v, SRC_YT, meta={"rows": len(df_v)}
+            df_v, SRC, meta={"rows": len(df_v)}
         )
         print(f"  ✓ {len(df_v)} videos -> silver")
         
@@ -159,7 +159,7 @@ def build_yt_silver(videos, comments):
         df_c["ingest_date"] = D
         put_parquet(
             f"silver/text/youtube_comments/ingest_date={D}/part-0.parquet",
-            df_c, SRC_YT, meta={"rows": len(df_c)}
+            df_c, SRC, meta={"rows": len(df_c)}
         )
         print(f"  ✓ {len(df_c)} comments -> silver")
 
