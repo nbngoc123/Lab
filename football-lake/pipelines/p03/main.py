@@ -13,8 +13,8 @@ TEST_MODE = os.getenv("TEST_MODE") == "1"
 SRC = "football-data.co.uk"
 BASE = "https://www.football-data.co.uk/mmz4281"
 
-# Backfill 10 mùa EPL + Championship
-# Mã mùa: "1516" = 2015/16, "2425" = 2024/25
+Backfill 10 mùa EPL + Championship
+Mã mùa: "1516" = 2015/16, "2425" = 2024/25
 DIVISIONS = ["E0"] if TEST_MODE else ["E0", "E1"]   # E0=EPL, E1=Championship
 SEASONS = ["2425"] if TEST_MODE else [
     "1516", "1617", "1718", "1819", "1920",
@@ -34,7 +34,7 @@ def _season_label(raw: str) -> str:
     return f"20{raw[:2]}-{raw[2:]}"
 
 
-# ---------- BRONZE ----------
+---------- BRONZE ----------
 def download_all() -> dict:
     """Tải raw CSV, không parse. Trả về dict {(div, season): key}."""
     keys, failed = {}, []
@@ -61,7 +61,7 @@ def download_all() -> dict:
     return keys
 
 
-# ---------- phân tích schema drift ----------
+---------- phân tích schema drift ----------
 def schema_report(keys: dict):
     report = {}
     all_cols = set()
@@ -110,7 +110,7 @@ def _parse_date(s: pd.Series) -> pd.Series:
     return d.fillna(fallback)
 
 
-# ---------- SILVER ----------
+---------- SILVER ----------
 def build_matches(keys: dict):
     for (div, season), key in sorted(keys.items()):
         df = _read_csv(key)
