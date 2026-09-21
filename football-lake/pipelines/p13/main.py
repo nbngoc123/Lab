@@ -68,7 +68,7 @@ def load_stadiums() -> list:
     return df.to_dict("records")
 
 
-def ingest_all_historical(stadiums: list, start="2024-08-01", end="2024-09-01"):
+def ingest_all_historical(stadiums: list, start="2025-08-01", end="2026-06-01"):
     """Dữ liệu lịch sử."""
     if TEST_MODE:
         start = "2024-08-01"
