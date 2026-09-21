@@ -259,8 +259,8 @@ def build_teams_dim(all_teams: list):
 
 def build_players_dim():
     """Đọc từ Bronze build metadata cầu thủ chi tiết (Lương, Hợp đồng, ID chéo...)"""
-    from lake.minio_io import list_objects, read_json_gz
-    keys = list_objects(f"bronze/thesportsdb/metadata/entity=players/")
+    from lake.minio_io import list_keys, read_json_gz
+    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=players/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
@@ -295,10 +295,10 @@ def build_players_dim():
 
 
 def build_player_honors_former_teams():
-    from lake.minio_io import list_objects, read_json_gz
+    from lake.minio_io import list_keys, read_json_gz
     
     # Honors
-    keys = list_objects(f"bronze/thesportsdb/metadata/entity=honors/")
+    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=honors/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
@@ -316,7 +316,7 @@ def build_player_honors_former_teams():
         print(f"  ✓ dim honors: {len(df_h)} danh hiệu")
 
     # Former Teams
-    keys = list_objects(f"bronze/thesportsdb/metadata/entity=former_teams/")
+    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=former_teams/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
