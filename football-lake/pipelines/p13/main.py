@@ -57,6 +57,8 @@ def load_stadiums() -> list:
         
     df = pd.concat(dfs, ignore_index=True)
     if "venueLabel" in df.columns:
+        if "venue" in df.columns:
+            df = df.drop(columns=["venue"])
         df = df.rename(columns={"venueLabel": "venue"})
     df = df[df.lat.notna() & df.lon.notna()]
     # Thêm team_key để join qua alias thay vì so chuỗi tên sân
