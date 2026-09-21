@@ -33,7 +33,12 @@ LEAGUES = [
     {"name": "Brazilian Serie A",            "slug": "SerieA_BR"},
     {"name": "Argentine Primera Division",   "slug": "PrimeraDivision"},
     {"name": "FIFA World Cup",               "slug": "WorldCup"},
+    {"name": "Danish Superliga",             "slug": "danish_superliga"},
 ]
+
+TEST_MODE = os.getenv("TEST_MODE") == "1"
+if TEST_MODE:
+    LEAGUES = LEAGUES[:1]
 
 TEAM_IMAGES = {
     "strBadge": "badge", "strLogo": "logo", "strBanner": "banner",
@@ -354,7 +359,7 @@ def run_pipeline():
         if not teams: continue
         all_teams.extend(teams)
 
-        manifest = ingest_team_media(teams, slug)
+        manifest = ingest_team_media(teams)
         all_manifest.extend(manifest)
 
         print(f"    · Cào cầu thủ, hợp đồng, cúp, CLB cũ {slug}...")
