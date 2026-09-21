@@ -10,7 +10,8 @@ Host vm
     LocalForward 8080 localhost:8080
     LocalForward 9000 localhost:9000
     LocalForward 9001 localhost:9001
-    LocalForward 5432 localhost:5432
+    LocalForward 5432 localhost:54321
+    LocalForward 15672 localhost:15672
     ServerAliveInterval 60
     ServerAliveCountMax 3
     StrictHostKeyChecking no
