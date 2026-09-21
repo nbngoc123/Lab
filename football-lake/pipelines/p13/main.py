@@ -65,6 +65,8 @@ def load_stadiums() -> list:
     df = add_team_key(df, "venue", source="openmeteo", out_col="team_key")
     if TEST_MODE:
         df = df.head(2)
+    import numpy as np
+    df = df.replace({np.nan: None})
     return df.to_dict("records")
 
 
