@@ -32,7 +32,7 @@ D          = today()
 LEAGUE     = 39          # Premier League
 SEASON     = 2024        # 2024/2025
 TEST_MODE  = os.getenv("TEST_MODE") == "1"
-DAILY_BUDGET = 5 if TEST_MODE else 80        # Giới hạn 80/100 req/ngày (giữ lại 20 dự phòng)
+DAILY_BUDGET = 5 if TEST_MODE else 75        # Giới hạn 75/100 req/ngày (để an toàn dưới 100)
 CHECKPOINT_KEY = "_meta/api_football_p24/checkpoint.json"
 
 API_KEY  = os.getenv("API_FOOTBALL_KEY", "")
@@ -633,47 +633,62 @@ def run_pipeline():
 
     print(f"=== p24: API-Football Full Pipeline (budget={DAILY_BUDGET} req) ===\n")
 
-    # ── BRONZE ──
-    print("[1/9] Teams & Venues")
-    teams_body = ingest_teams()
-
-    print("\n[2/9] Standings")
-    standings_body = ingest_standings()
-
-    print("\n[3/9] Fixtures (380 trận)")
-    fixtures_body = ingest_fixtures()
-
-    print("\n[4/9] Top Scorers + Assists + Yellow + Red cards")
-    scorers_body   = ingest_top_scorers()
-    assists_body   = ingest_top_assists()
-    yellow_body    = ingest_top_yellow_cards()
-    red_body       = ingest_top_red_cards()
-
-    print("\n[5/9] Injuries")
-    injuries_body = ingest_injuries()
-
-    print("\n[6/9] Players (1 page/ngày, tích lũy)")
-    ingest_players_squad()
-
-    print("\n[7/9] Fixture Details (Events + Lineups + Statistics)")
+    teams_body = None
+    standings_body = None
+    fixtures_body = None
+    scorers_body = None
+    assists_body = None
+    yellow_body = None
+    red_body = None
+    injuries_body = None
+    manifest = []
     done = load_checkpoint()
-    done = ingest_fixture_details(fixtures_body, done)
-    save_checkpoint(done)
 
-    print("\n[8/9] Binary Media (logo + venue + player photos — không tốn quota API)")
-    manifest = ingest_media_binary(teams_body)
+    try:
+        # ── BRONZE ──
+        print("[1/9] Teams & Venues")
+        teams_body = ingest_teams()
+
+        print("\n[2/9] Standings")
+        standings_body = ingest_standings()
+
+        print("\n[3/9] Fixtures (380 trận)")
+        fixtures_body = ingest_fixtures()
+
+        print("\n[4/9] Top Scorers + Assists + Yellow + Red cards")
+        scorers_body   = ingest_top_scorers()
+        assists_body   = ingest_top_assists()
+        yellow_body    = ingest_top_yellow_cards()
+        red_body       = ingest_top_red_cards()
+
+        print("\n[5/9] Injuries")
+        injuries_body = ingest_injuries()
+
+        print("\n[6/9] Players (1 page/ngày, tích lũy)")
+        ingest_players_squad()
+
+        print("\n[7/9] Fixture Details (Events + Lineups + Statistics)")
+        done = ingest_fixture_details(fixtures_body, done)
+        save_checkpoint(done)
+
+        print("\n[8/9] Binary Media (logo + venue + player photos — không tốn quota API)")
+        manifest = ingest_media_binary(teams_body)
+    except Exception as e:
+        print(f"\n[!] Dừng lấy Bronze do lỗi (hoặc hết Quota): {e}")
+        print("[!] Đang tự động chuyển sang Bước 9: Build Silver với dữ liệu hiện có...")
+        save_checkpoint(done)
 
     # ── SILVER ──
     print("\n[9/9] Build Silver")
-    build_silver_fixtures(fixtures_body)
-    build_silver_standings(standings_body)
-    build_silver_top_scorers(scorers_body)
+    if fixtures_body: build_silver_fixtures(fixtures_body)
+    if standings_body: build_silver_standings(standings_body)
+    if scorers_body: build_silver_top_scorers(scorers_body)
     build_silver_events(done)
     build_silver_lineups(done)
     build_silver_stats(done)
     build_silver_players()
-    build_silver_media_manifest(manifest)
-    build_silver_injuries(injuries_body)
+    if manifest: build_silver_media_manifest(manifest)
+    if injuries_body: build_silver_injuries(injuries_body)
 
     # ── SUMMARY ──
     print("\n=== SUMMARY ===")
