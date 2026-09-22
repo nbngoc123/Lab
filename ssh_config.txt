@@ -1,4 +1,5 @@
 # SSH Config cho Azure VM Data
+# type "D:\O\DOC\Năm 4\Data Mining\ssh_config.txt" >> C:\Users\ADMIN\.ssh\config
 # Usage: ssh vm
 
 Host vm
