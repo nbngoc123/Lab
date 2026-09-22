@@ -12,6 +12,7 @@ Thay vì đưa toàn bộ dữ liệu bóng đá vào một bảng duy nhất ch
 * **Team Data Mart** → phân tích phong độ đội bóng.
 * **League Data Mart** → phân tích giải đấu và bảng xếp hạng.
 * **Market Data Mart** → phân tích tỷ lệ cược và thị trường.
+* **Player Data Mart** → phân tích hiệu suất và thống kê cầu thủ.
 
 Mỗi Data Mart chỉ chứa những dữ liệu cần thiết cho một nhóm phân tích cụ thể.
 
@@ -29,9 +30,9 @@ Data Mart thuộc **tầng Gold**:
         ▼              ▼              ▼
       OBT           FEATURE       DATA MART
         │              │              │
-        │              │       ┌──────┼──────┬──────┐
-        │              │       ▼      ▼      ▼      ▼
-        │              │    Match   Team   League  Market
+        │              │       ┌──────┼──────┬──────┬──────┐
+        │              │       ▼      ▼      ▼      ▼      ▼
+        │              │    Match   Team   League  Market Player
         │              │
         ▼              ▼              ▼
                    END USERS
@@ -165,6 +166,36 @@ Các nhóm dữ liệu chính:
 
 ---
 
+### 3.5. Player Data Mart
+
+**Mục đích:** phục vụ phân tích hiệu suất và thống kê thi đấu của cầu thủ.
+
+Dữ liệu được tổng hợp theo **cầu thủ và mùa giải**.
+
+Các nhóm dữ liệu chính:
+
+* Tên cầu thủ.
+* Vị trí.
+* Đội bóng.
+* Giải đấu.
+* Mùa giải.
+* Số trận ra sân.
+* Số phút thi đấu.
+* Bàn thắng.
+* Kiến tạo.
+* Các chỉ số thi đấu khác có sẵn trong Silver (xG, xA, thẻ vàng, thẻ đỏ...).
+
+Chỉ đưa vào Mart những trường thực sự có nguồn dữ liệu trong Silver — không tự suy diễn hay tạo trường thống kê chưa tồn tại.
+
+**Các câu hỏi có thể phân tích:**
+
+* Cầu thủ nào ghi nhiều bàn/kiến tạo nhất mùa giải?
+* So sánh hiệu suất giữa các cầu thủ cùng vị trí?
+* Cầu thủ nào có phong độ tốt nhất trong đội?
+* Thống kê cầu thủ theo giải đấu hoặc theo đội bóng?
+
+---
+
 ## 4. Cách xây dựng Data Mart
 
 Quá trình xây dựng Data Mart được thực hiện theo các bước:
@@ -202,6 +233,9 @@ mart_league
 
 mart_market
 → 1 dòng = 1 trận đấu / nhà cái
+
+mart_player
+→ 1 dòng = 1 cầu thủ trong 1 mùa giải
 ```
 
 Việc xác định Grain giúp tránh dữ liệu bị trùng hoặc tổng hợp sai.
@@ -278,6 +312,9 @@ League Mart
 
 Market Mart
 → cấp độ trận đấu + nhà cái
+
+Player Mart
+→ tổng hợp theo cầu thủ + mùa giải
 ```
 
 ---
@@ -309,7 +346,8 @@ gold/
     ├── mart_match
     ├── mart_team
     ├── mart_league
-    └── mart_market
+    ├── mart_market
+    └── mart_player
 ```
 
 ---
@@ -373,12 +411,12 @@ Sau khi triển khai, tầng Gold của hệ thống gồm ba nhóm sản phẩm
           ▼                ▼                ▼
          OBT            FEATURE          DATA MART
           │                │                │
-          │                │       ┌────────┼────────┐
-          │                │       │        │        │
-          │                │       ▼        ▼        ▼
-          │                │    Match     Team    League
+          │                │       ┌────────┼────────┬────────┐
+          │                │       │        │        │        │
+          │                │       ▼        ▼        ▼        ▼
+          │                │    Match     Team    League   Market
           │                │
-          │                │                 └── Market
+          │                │                          └── Player
           │                │
           ▼                ▼                ▼
      Phân tích         Machine Learning    BI / Dashboard
@@ -393,5 +431,6 @@ Sau khi triển khai, tầng Gold của hệ thống gồm ba nhóm sản phẩm
 | `mart_team`   | 1 đội / mùa giải        | Phân tích phong độ đội      |
 | `mart_league` | 1 đội / giải / mùa giải | Phân tích giải đấu & BXH    |
 | `mart_market` | 1 trận / nhà cái        | Phân tích Odds & thị trường |
+| `mart_player` | 1 cầu thủ / mùa giải    | Phân tích hiệu suất cầu thủ |
 
-Như vậy, **4 Data Mart là đủ cho phạm vi project**, mỗi Mart có một chủ đề rõ ràng và có thể kết nối trực tiếp với BI để xây dựng Dashboard.
+Như vậy, **5 Data Mart** là đủ cho phạm vi project, mỗi Mart có một chủ đề rõ ràng và có thể kết nối trực tiếp với BI để xây dựng Dashboard.
