@@ -7,13 +7,28 @@ Chạy trong container airflow:
     python ml/features/build_features.py                # MinIO
     python ml/features/build_features.py --root ./lake  # thư mục local (thử nghiệm)
 
-ĐỌC silver: matches/fd_matches, odds/fd_odds, teams/understat_team_xg,
-            text/wm_pageviews (entity=team), matches/fd_matches_weather (4 nguồn sau là tùy chọn)
-GHI gold/features/: feature_team_match, feature_league_position, feature_elo, feature_market,
-            feature_team_xg, feature_team_attention, feature_match_context,
-            feature_match_ml (1 dòng/trận + target_*), _feature_catalog.csv
+ĐỌC silver:
+    matches/fd_matches, odds/fd_odds, teams/understat_team_xg,
+    text/wm_pageviews (entity=team), matches/fd_matches_weather   (nhóm gốc, bắt buộc/tùy chọn)
+    betting/odds_h2h|odds_spreads|odds_totals                     (p22 — kèo handicap/tài xỉu)
+    text/google_news_articles, text/wiki_articles(entity=team)    (p20 — độ ồn truyền thông)
+    players/pr_player_injuries, dim/pr_club_injury_summary        (p16 — chấn thương, as-of join)
+    matches/af_fixtures, af_match_stats                           (p24 — bắc cầu match_id + rolling stats)
+    matches/fdo_matches                                           (p09 — CHỈ đối chiếu/QA, không tạo feature)
+GHI gold/features/:
+    feature_team_match, feature_league_position, feature_elo, feature_market,
+    feature_team_xg, feature_team_attention, feature_match_context,
+    feature_market_ah, feature_team_news_buzz, feature_team_injuries,
+    feature_team_stats_af, bridge_fd_af_match,
+    feature_match_ml (1 dòng/trận + target_*), _feature_catalog.csv
+GHI gold/dim/: dim_team_wiki_profile (tĩnh, KHÔNG phải feature ML)
+GHI gold/qa/: fdo_vs_fd_matches.csv (đối chiếu p09 vs p03, không phải feature)
 
 CHỐNG RÒ RỈ: feature của trận T chỉ dùng dữ liệu (ngày, match_id) < T.
+    - odds/kèo (fd_odds, odds_h2h/spreads/totals): chốt trước giờ bóng lăn -> dùng trực tiếp, không rolling.
+    - chấn thương (p16): as-of join ingest_date <= match_date (snapshot GẦN NHẤT TRƯỚC trận).
+    - stats trận đấu (p24 af_match_stats): là dữ liệu SAU trận -> chỉ dùng làm rolling l5 từ các trận
+      TRƯỚC đó (ROWS BETWEEN 5 PRECEDING AND 1 PRECEDING), không bao giờ dùng số liệu của chính trận đó.
 """
 import argparse, io, os, sys
 from pathlib import Path
@@ -21,6 +36,8 @@ import duckdb
 import pandas as pd
 
 OUT = "gold/features"
+DIM_OUT = "gold/dim"
+QA_OUT = "gold/qa"
 SRC_TAG = "gold-features"
 
 ROLL_FEATS = ["n_prior", "n_prior_season", "rest_days",
@@ -37,6 +54,14 @@ MKT_COLS = ["mkt_p_home", "mkt_p_draw", "mkt_p_away", "mkt_margin", "mkt_n_books
             "pin_p_home", "pin_p_draw", "pin_p_away"]
 ELO_COLS = ["elo_home", "elo_away", "elo_diff", "elo_exp_home"]
 CTX_COLS = ["kickoff_hour", "dow", "month", "is_weekend", "temp_c", "precip_mm", "wind_kmh", "is_raining"]
+AH_COLS = ["ah_home_price_avg", "ah_away_price_avg", "ah_home_point_avg", "ah_n_books",
+           "ou_over_price_avg", "ou_under_price_avg", "ou_line_avg", "ou_n_books"]
+NEWS_FEATS = ["news_n7", "news_n28"]
+NEWS_DIFF = ["news_n28"]
+INJ_FEATS = ["n_injured_players", "total_injuries"]
+INJ_DIFF = ["n_injured_players"]
+AF_FEATS = ["poss_l5", "sog_l5", "shots_total_l5", "corners_af_l5", "fouls_l5"]
+AF_DIFF = ["poss_l5", "sog_l5"]
 TARGET_COLS = ["target", "target_home_goals", "target_away_goals", "target_total_goals",
                "target_over25", "target_btts"]
 KEY_COLS = ["match_id", "division", "season", "match_date", "home_key", "away_key",
@@ -51,6 +76,9 @@ class LocalStore:
         for p in sorted((self.root / prefix).rglob("*.parquet")):
             d = pd.read_parquet(p); d["_key"] = p.relative_to(self.root).as_posix(); dfs.append(d)
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+    def read_file(self, key):
+        p = self.root / key
+        return pd.read_parquet(p) if p.exists() else pd.DataFrame()
     def write_parquet(self, key, df):
         p = self.root / key; p.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(p, index=False, compression="zstd"); print(f"  ✓ {key}  ({len(df):,} dòng)")
@@ -76,6 +104,11 @@ class MinioStore:
             if key.endswith(".parquet"):
                 d = pd.read_parquet(io.BytesIO(self.mio.read_bytes(key))); d["_key"] = key; dfs.append(d)
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+    def read_file(self, key):
+        try:
+            return pd.read_parquet(io.BytesIO(self.mio.read_bytes(key)))
+        except Exception:
+            return pd.DataFrame()
     def write_parquet(self, key, df):
         self.mio.put_parquet(key, df, SRC_TAG); print(f"  ✓ {key}  ({len(df):,} dòng)")
     def write_csv(self, key, df):
@@ -261,7 +294,249 @@ def load_weather(store):
                          "precip_mm": num(w, r).values, "wind_kmh": num(w, d).values})
 
 
-# ---------------- SQL feature
+# ---------------- p22: odds handicap (spreads) & totals (over/under)
+def load_odds_handicap(store, alias):
+    """silver/betting/odds_spreads, odds_totals (p22 - The Odds API).
+    match_id của Odds API KHÁC hẳn 'E0_...' của fd_matches -> join theo (home_key, away_key, ngày),
+    KHÔNG theo match_id. seed/team_alias.csv đã có sẵn source='odds' khớp tên đội của Odds API.
+    Giới hạn: bản free chỉ trả kèo trận SẮP diễn ra, không backfill lịch sử."""
+    def _empty(cols): return pd.DataFrame(columns=cols)
+    sp = store.read_prefix("silver/betting/odds_spreads/")
+    if sp.empty:
+        print("  ! không có odds_spreads -> ah_* sẽ NULL")
+        sp = _empty(["home_key", "away_key", "match_date", "side_key", "price", "point", "bookmaker"])
+    else:
+        sp = sp.copy()
+        sp["home_key"] = map_team(sp["home_team"], "odds", alias, "odds_spreads.home_team")
+        sp["away_key"] = map_team(sp["away_team"], "odds", alias, "odds_spreads.away_team")
+        sp["side_key"] = map_team(sp["team"], "odds", alias, "odds_spreads.team")
+        sp["match_date"] = pd.to_datetime(sp["commence_time"], errors="coerce").dt.date
+    tt = store.read_prefix("silver/betting/odds_totals/")
+    if tt.empty:
+        print("  ! không có odds_totals -> ou_* sẽ NULL")
+        tt = _empty(["home_key", "away_key", "match_date", "name", "price", "point", "bookmaker"])
+    else:
+        tt = tt.copy()
+        tt["home_key"] = map_team(tt["home_team"], "odds", alias, "odds_totals.home_team")
+        tt["away_key"] = map_team(tt["away_team"], "odds", alias, "odds_totals.away_team")
+        tt["match_date"] = pd.to_datetime(tt["commence_time"], errors="coerce").dt.date
+    return sp, tt
+
+
+def build_market_ah(con):
+    con.execute("""
+    CREATE OR REPLACE TABLE feature_market_ah AS
+    WITH sp AS (
+      SELECT home_key, away_key, match_date,
+             AVG(price) FILTER (WHERE side_key = home_key) AS ah_home_price_avg,
+             AVG(price) FILTER (WHERE side_key = away_key) AS ah_away_price_avg,
+             AVG(point) FILTER (WHERE side_key = home_key) AS ah_home_point_avg,
+             COUNT(DISTINCT bookmaker) AS ah_n_books
+      FROM ah_spreads GROUP BY 1, 2, 3),
+    tt AS (
+      SELECT home_key, away_key, match_date,
+             AVG(price) FILTER (WHERE name = 'Over')  AS ou_over_price_avg,
+             AVG(price) FILTER (WHERE name = 'Under') AS ou_under_price_avg,
+             AVG(point) AS ou_line_avg,
+             COUNT(DISTINCT bookmaker) AS ou_n_books
+      FROM ah_totals GROUP BY 1, 2, 3)
+    SELECT m.match_id,
+           sp.ah_home_price_avg, sp.ah_away_price_avg, sp.ah_home_point_avg, sp.ah_n_books,
+           tt.ou_over_price_avg, tt.ou_under_price_avg, tt.ou_line_avg, tt.ou_n_books
+    FROM m
+    LEFT JOIN sp ON sp.home_key = m.home_key AND sp.away_key = m.away_key AND sp.match_date = m.match_date
+    LEFT JOIN tt ON tt.home_key = m.home_key AND tt.away_key = m.away_key AND tt.match_date = m.match_date
+    """)
+
+
+# ---------------- p20: Wikipedia (dim tĩnh) & Google News (độ ồn truyền thông)
+def load_wiki_dim(store):
+    """silver/text/wiki_articles/entity=team: bài full-text gần như KHÔNG đổi qua các lần cào
+    -> không hợp làm feature rolling theo trận, chỉ ghi ra dim mô tả (gold/dim), không join vào ML."""
+    w = store.read_prefix("silver/text/wiki_articles/entity=team/")
+    if w.empty:
+        print("  ! không có wiki_articles/entity=team -> bỏ qua dim_team_wiki_profile")
+        return pd.DataFrame()
+    dim = (w.sort_values("_key").drop_duplicates(["title", "lang"], keep="last")
+             [["title", "lang", "page_id", "word_count", "fetched_date"]])
+    print(f"  · dim_team_wiki_profile: {len(dim)} dòng (tĩnh, KHÔNG phải feature ML)")
+    return dim
+
+
+def load_news_buzz(store, alias):
+    """silver/text/google_news_articles: chỉ 2/7 query gắn thẳng 1 CLB -> quét chuỗi 'text'
+    (title+summary) tìm bất kỳ tên đội nào có trong seed/team_alias.csv thay vì dựa cột 'query'."""
+    n = store.read_prefix("silver/text/google_news_articles/")
+    if n.empty:
+        print("  ! không có google_news_articles -> feature_team_news_buzz rỗng")
+        return pd.DataFrame(columns=["team_key", "date", "n_mentions"])
+    n = n.copy()
+    n["date"] = pd.to_datetime(n["published_ts"], errors="coerce", utc=True).dt.tz_localize(None).dt.date
+    n = n.dropna(subset=["date", "text"])
+    _, any_src = alias
+    aliases = sorted(any_src.items(), key=lambda kv: -len(kv[0]))  # alias dài trước, tránh khớp nhầm
+    rows = []
+    for r in n.itertuples():
+        low = r.text.lower()
+        for al, tk in aliases:
+            if al in low: rows.append((tk, r.date))
+    out = pd.DataFrame(rows, columns=["team_key", "date"])
+    if out.empty:
+        return pd.DataFrame(columns=["team_key", "date", "n_mentions"])
+    out = out.groupby(["team_key", "date"]).size().reset_index(name="n_mentions")
+    print(f"  · news_buzz: quét {len(n):,} bài -> {len(out):,} dòng team-ngày, "
+          f"{out.team_key.nunique()} đội được nhắc tới")
+    return out
+
+
+def build_news_buzz(con):
+    con.execute("""
+    CREATE OR REPLACE TABLE feature_team_news_buzz AS
+    SELECT tm.match_id, tm.team_key,
+      SUM(nb.n_mentions) FILTER (WHERE nb.date >= tm.match_date - 7  AND nb.date < tm.match_date) AS news_n7,
+      SUM(nb.n_mentions) FILTER (WHERE nb.date >= tm.match_date - 28 AND nb.date < tm.match_date) AS news_n28
+    FROM tm LEFT JOIN nb ON nb.team_key = tm.team_key
+    GROUP BY tm.match_id, tm.team_key
+    """)
+
+
+# ---------------- p16: injuries (as-of join, không rolling)
+def load_injuries(store, alias):
+    """silver/players/pr_player_injuries + dim/pr_club_injury_summary: snapshot theo ingest_date,
+    KHÔNG có match_id -> ghép bằng ASOF JOIN (snapshot gần nhất TRƯỚC match_date) ở build_injuries()."""
+    p = store.read_prefix("silver/players/pr_player_injuries/")
+    s = store.read_prefix("silver/dim/pr_club_injury_summary/")
+    cols = ["team_key", "ingest_date", "n_injured_players", "total_injuries"]
+    if p.empty:
+        print("  ! không có pr_player_injuries -> feature_team_injuries rỗng")
+        return pd.DataFrame(columns=cols)
+    p = p.copy()
+    p["team_key"] = map_team(p["team"], "physioroom", alias, "pr_player_injuries.team")
+    p["ingest_date"] = pd.to_datetime(p["ingest_date"], errors="coerce").dt.date
+    agg = p.groupby(["team_key", "ingest_date"]).size().reset_index(name="n_injured_players")
+    if not s.empty:
+        s = s.copy()
+        s["team_key"] = map_team(s["team"], "physioroom", alias, "pr_club_injury_summary.team")
+        s["ingest_date"] = pd.to_datetime(s["ingest_date"], errors="coerce").dt.date
+        agg = agg.merge(s[["team_key", "ingest_date", "total_injuries"]],
+                         on=["team_key", "ingest_date"], how="outer")
+    print(f"  · injuries: {agg['ingest_date'].nunique()} lần scrape, {agg['team_key'].nunique()} đội")
+    return agg.sort_values(["team_key", "ingest_date"])
+
+
+def build_injuries(con):
+    con.execute("""
+    CREATE OR REPLACE TABLE feature_team_injuries AS
+    SELECT tm.match_id, tm.team_key, inj.ingest_date AS injury_asof_date,
+           inj.n_injured_players, inj.total_injuries
+    FROM tm
+    ASOF LEFT JOIN inj
+      ON tm.team_key = inj.team_key AND tm.match_date >= inj.ingest_date
+    """)
+
+
+# ---------------- p24: bắc cầu match_id (fd <-> api-football) + rolling stats (leakage-safe)
+def load_af_fixtures(store, alias):
+    af = store.read_prefix("silver/matches/af_fixtures/")
+    cols = ["fixture_id", "home_key", "away_key", "match_date", "home_goals", "away_goals"]
+    if af.empty:
+        print("  ! không có af_fixtures -> không bắc cầu được"); return pd.DataFrame(columns=cols)
+    af = af.sort_values("_key").drop_duplicates("fixture_id", keep="last").copy()
+    af["home_key"] = map_team(af["home_team"], "apifootball", alias, "af_fixtures.home_team")
+    af["away_key"] = map_team(af["away_team"], "apifootball", alias, "af_fixtures.away_team")
+    dt = pd.to_datetime(af["date"], errors="coerce", utc=True)
+    af["match_date"] = dt.dt.tz_localize(None).dt.date
+    return af[cols]
+
+
+def load_af_stats(store, alias):
+    s = store.read_prefix("silver/matches/af_match_stats/")
+    cols = ["fixture_id", "team_key", "possession_pct", "shots_on_goal", "total_shots", "corner_kicks", "fouls"]
+    if s.empty:
+        print("  ! không có af_match_stats -> feature_team_stats_af rỗng"); return pd.DataFrame(columns=cols)
+    s = s.copy()
+    s["team_key"] = map_team(s["team"], "apifootball", alias, "af_match_stats.team")
+    poss = first_present(s, ["ball_possession", "possession"])
+    out = pd.DataFrame({
+        "fixture_id": s["fixture_id"].values, "team_key": s["team_key"].values,
+        "possession_pct": num(s, poss).values, "shots_on_goal": num(s, "shots_on_goal").values,
+        "total_shots": num(s, "total_shots").values, "corner_kicks": num(s, "corner_kicks").values,
+        "fouls": num(s, "fouls").values})
+    return out
+
+
+def build_af_bridge(con):
+    """Ánh xạ match_id (fd_matches) <-> fixture_id (api-football) qua (home_key, away_key, ngày lệch <=1).
+    Đây là bảng nền cho feature_team_stats_af và cho các notebook khai thác af_match_events/af_lineups sau này."""
+    con.execute("""
+    CREATE OR REPLACE TABLE bridge_fd_af_match AS
+    SELECT m.match_id, af.fixture_id, m.match_date AS fd_date, af.match_date AS af_date,
+           (m.home_goals = af.home_goals AND m.away_goals = af.away_goals) AS score_match
+    FROM m JOIN af_fx af
+      ON af.home_key = m.home_key AND af.away_key = m.away_key
+     AND abs(date_diff('day', af.match_date, m.match_date)) <= 1
+    """)
+
+
+def build_af_stats_rolling(con):
+    """CHỐNG RÒ RỈ: af_match_stats là số liệu SAU trận -> chỉ dùng làm rolling l5 từ các trận
+    TRƯỚC đó (giống hệt cách build_team_match/build_xg đang làm), không bao giờ dùng số liệu
+    của chính trận đang dự đoán."""
+    con.execute("""
+    CREATE OR REPLACE TABLE afx AS
+    SELECT b.match_id, b.fd_date AS match_date, s.team_key,
+           s.possession_pct, s.shots_on_goal, s.total_shots, s.corner_kicks, s.fouls
+    FROM af_stats_raw s JOIN bridge_fd_af_match b ON b.fixture_id = s.fixture_id
+    """)
+    con.execute("""
+    CREATE OR REPLACE TABLE feature_team_stats_af AS
+    SELECT match_id, team_key,
+      AVG(possession_pct) OVER w5 AS poss_l5, AVG(shots_on_goal) OVER w5 AS sog_l5,
+      AVG(total_shots) OVER w5 AS shots_total_l5, AVG(corner_kicks) OVER w5 AS corners_af_l5,
+      AVG(fouls) OVER w5 AS fouls_l5
+    FROM afx
+    WINDOW w5 AS (PARTITION BY team_key ORDER BY match_date ROWS BETWEEN 5 PRECEDING AND 1 PRECEDING)
+    """)
+
+
+# ---------------- p09: fdo_matches — CHỈ đối chiếu/QA với fd_matches, KHÔNG tạo feature
+def load_fdo(store, alias):
+    f = store.read_prefix("silver/matches/fdo_matches/")
+    cols = ["match_id", "home_key", "away_key", "match_date", "home_goals", "away_goals", "status"]
+    if f.empty:
+        print("  ! không có fdo_matches -> bỏ qua đối chiếu p09"); return pd.DataFrame(columns=cols)
+    f = f.copy()
+    f["home_key"] = map_team(f["home_team"], "fdo", alias, "fdo_matches.home_team")
+    f["away_key"] = map_team(f["away_team"], "fdo", alias, "fdo_matches.away_team")
+    f["match_date"] = pd.to_datetime(f["utc_date"], errors="coerce").dt.date
+    return f[cols]
+
+
+def qa_fdo_crosscheck(con, store):
+    n = con.execute("SELECT count(*) FROM fdo").fetchone()[0]
+    if n == 0: return
+    gap = con.execute("""
+        SELECT fdo.match_id, fdo.home_key, fdo.away_key, fdo.match_date, fdo.home_goals, fdo.away_goals
+        FROM fdo LEFT JOIN m ON m.home_key = fdo.home_key AND m.away_key = fdo.away_key
+                             AND abs(date_diff('day', m.match_date, fdo.match_date)) <= 1
+        WHERE m.match_id IS NULL AND fdo.status = 'FINISHED'
+    """).df()
+    mismatch = con.execute("""
+        SELECT m.match_id, m.match_date, m.home_goals, m.away_goals,
+               fdo.home_goals AS fdo_home_goals, fdo.away_goals AS fdo_away_goals
+        FROM m JOIN fdo ON fdo.home_key = m.home_key AND fdo.away_key = m.away_key
+                       AND abs(date_diff('day', m.match_date, fdo.match_date)) <= 1
+        WHERE m.home_goals != fdo.home_goals OR m.away_goals != fdo.away_goals
+    """).df()
+    print(f"  · p09 QA: fdo_matches {n:,} trận. {len(gap)} trận fdo có mà fd_matches KHÔNG có "
+          f"(ứng viên vá lỗ hổng); {len(mismatch)} trận tỉ số LỆCH giữa 2 nguồn.")
+    report = pd.concat([gap.assign(issue="missing_in_fd"), mismatch.assign(issue="score_mismatch")],
+                        ignore_index=True) if (len(gap) or len(mismatch)) else pd.DataFrame(
+                        columns=["issue"])
+    store.write_csv(f"{QA_OUT}/fdo_vs_fd_matches.csv", report)
+
+
+# ---------------- SQL feature (nhóm gốc)
 def win(n, order="match_date, match_id", by="team_key"):
     return f"(PARTITION BY {by} ORDER BY {order} ROWS BETWEEN {n} PRECEDING AND 1 PRECEDING)"
 
@@ -429,6 +704,12 @@ def build_match_ml(con):
     xg += [f"hx.{f} - ax.{f} AS diff_{f}" for f in XG_DIFF]
     att = [sel("hv", f, "home") for f in ATT_FEATS] + [sel("av", f, "away") for f in ATT_FEATS]
     att += ["hv.pv_ratio_7_28 - av.pv_ratio_7_28 AS diff_pv_ratio_7_28"]
+    news = [sel("hn", f, "home") for f in NEWS_FEATS] + [sel("an", f, "away") for f in NEWS_FEATS]
+    news += [f"hn.{f} - an.{f} AS diff_{f}" for f in NEWS_DIFF]
+    inj = [sel("hi", f, "home") for f in INJ_FEATS] + [sel("ai", f, "away") for f in INJ_FEATS]
+    inj += [f"hi.{f} - ai.{f} AS diff_{f}" for f in INJ_DIFF]
+    afst = [sel("haf", f, "home") for f in AF_FEATS] + [sel("aaf", f, "away") for f in AF_FEATS]
+    afst += [f"haf.{f} - aaf.{f} AS diff_{f}" for f in AF_DIFF]
     con.execute(f"""
     CREATE OR REPLACE TABLE feature_match_ml AS
     SELECT m.match_id, m.division, m.season, m.match_date, m.home_key, m.away_key, m.home_team, m.away_team,
@@ -439,6 +720,8 @@ def build_match_ml(con):
       e.elo_home, e.elo_away, e.elo_diff, e.elo_exp_home,
       {", ".join("mk." + c for c in MKT_COLS)},
       {", ".join(xg)}, {", ".join(att)},
+      {", ".join("ah." + c for c in AH_COLS)},
+      {", ".join(news)}, {", ".join(inj)}, {", ".join(afst)},
       {", ".join("cx." + c for c in CTX_COLS)},
       m.result AS target, m.home_goals AS target_home_goals, m.away_goals AS target_away_goals,
       m.home_goals + m.away_goals AS target_total_goals,
@@ -456,6 +739,13 @@ def build_match_ml(con):
     LEFT JOIN feature_team_xg ax ON ax.match_id = m.match_id AND ax.team_key = m.away_key
     LEFT JOIN feature_team_attention hv ON hv.match_id = m.match_id AND hv.team_key = m.home_key
     LEFT JOIN feature_team_attention av ON av.match_id = m.match_id AND av.team_key = m.away_key
+    LEFT JOIN feature_market_ah ah ON ah.match_id = m.match_id
+    LEFT JOIN feature_team_news_buzz hn ON hn.match_id = m.match_id AND hn.team_key = m.home_key
+    LEFT JOIN feature_team_news_buzz an ON an.match_id = m.match_id AND an.team_key = m.away_key
+    LEFT JOIN feature_team_injuries hi ON hi.match_id = m.match_id AND hi.team_key = m.home_key
+    LEFT JOIN feature_team_injuries ai ON ai.match_id = m.match_id AND ai.team_key = m.away_key
+    LEFT JOIN feature_team_stats_af haf ON haf.match_id = m.match_id AND haf.team_key = m.home_key
+    LEFT JOIN feature_team_stats_af aaf ON aaf.match_id = m.match_id AND aaf.team_key = m.away_key
     ORDER BY m.match_date, m.match_id
     """)
 
@@ -467,14 +757,21 @@ def catalog(con):
     for f in TARGET_COLS: grp[f] = "target"
     for f in ELO_COLS: grp[f] = "elo"
     for f in MKT_COLS: grp[f] = "market"
+    for f in AH_COLS: grp[f] = "market_ah"
     for f in CTX_COLS: grp[f] = "context"
     for p in ("home", "away"):
         for f in ROLL_FEATS: grp[f"{p}_{f}"] = "form"
         for f in POS_FEATS: grp[f"{p}_{f}"] = "position"
         for f in XG_FEATS: grp[f"{p}_{f}"] = "xg"
         for f in ATT_FEATS: grp[f"{p}_{f}"] = "attention"
+        for f in NEWS_FEATS: grp[f"{p}_{f}"] = "news_buzz"
+        for f in INJ_FEATS: grp[f"{p}_{f}"] = "injuries"
+        for f in AF_FEATS: grp[f"{p}_{f}"] = "stats_af"
     for f in FORM_DIFF: grp[f"diff_{f}"] = "form"
     for f in XG_DIFF: grp[f"diff_{f}"] = "xg"
+    for f in NEWS_DIFF: grp[f"diff_{f}"] = "news_buzz"
+    for f in INJ_DIFF: grp[f"diff_{f}"] = "injuries"
+    for f in AF_DIFF: grp[f"diff_{f}"] = "stats_af"
     grp.update({"rank_diff": "position", "points_diff": "position", "diff_pv_ratio_7_28": "attention"})
     return pd.DataFrame({"column_name": cols, "feature_group": [grp.get(c, "other") for c in cols]})
 
@@ -501,7 +798,11 @@ def qa(con, xg_seasons):
         round(avg((home_pts_l5 IS NOT NULL)::INT),2) AS form, round(avg((home_rank_before IS NOT NULL)::INT),2) AS position,
         round(avg((elo_home IS NOT NULL)::INT),2) AS elo, round(avg((mkt_p_home IS NOT NULL)::INT),2) AS market,
         round(avg((home_xg_l5 IS NOT NULL)::INT),2) AS xg, round(avg((home_pv_7d IS NOT NULL)::INT),2) AS attention,
-        round(avg((temp_c IS NOT NULL)::INT),2) AS weather, round(avg((home_sot_l5 IS NOT NULL)::INT),2) AS shots
+        round(avg((temp_c IS NOT NULL)::INT),2) AS weather, round(avg((home_sot_l5 IS NOT NULL)::INT),2) AS shots,
+        round(avg((ah_n_books IS NOT NULL)::INT),2) AS market_ah,
+        round(avg((home_news_n28 IS NOT NULL)::INT),2) AS news_buzz,
+        round(avg((home_n_injured_players IS NOT NULL)::INT),2) AS injuries,
+        round(avg((home_poss_l5 IS NOT NULL)::INT),2) AS stats_af
         FROM feature_match_ml WHERE is_warm = 1""").df()
     print("\n  Độ phủ feature (trận is_warm=1):"); print(cov.to_string(index=False))
     r = cov.iloc[0]
@@ -509,7 +810,11 @@ def qa(con, xg_seasons):
              "attention": "wm_pageviews chỉ từ 2023-01-01 hoặc label không khớp team_key",
              "weather": "fd_matches_weather chỉ có vài sân (p13 đang head(2))",
              "market": "fd_odds thiếu hoặc match_id không khớp",
-             "shots": "fd_matches không có HS/HST"}
+             "shots": "fd_matches không có HS/HST",
+             "market_ah": "p22 (Odds API) chỉ có kèo trận SẮP đấu, không backfill lịch sử — bình thường nếu thấp",
+             "news_buzz": "p20 google_news_articles ít bài hoặc chưa nhắc tới đội này",
+             "injuries": "p16 mới scrape ít lần (ingest_date) -> đa số trận cũ chưa có snapshot",
+             "stats_af": "p24 chưa cào đủ af_match_stats hoặc bridge_fd_af_match khớp ít trận"}
     for k, why in hints.items():
         if pd.isna(r[k]) or r[k] < 0.5: print(f"  ⚠ nhóm '{k}' phủ {r[k]}: {why}")
 
@@ -526,27 +831,52 @@ def main():
         args = ap.parse_args()
     a = args
     store = LocalStore(a.root) if a.root else MinioStore()
-    print("[1/8] đọc silver")
+    print("[1/11] đọc silver (nhóm gốc: matches/odds/xg/pageviews/weather)")
     alias = load_alias(Path(a.seed) if a.seed else find_seed())
     m = load_matches(store, alias, a.division)
     odds, ux, pv, wx = load_odds(store), load_xg(store, alias), load_pageviews(store, alias), load_weather(store)
     xg_seasons = "?" if ux.empty else f"{pd.to_datetime(ux.match_date).min():%Y-%m}..{pd.to_datetime(ux.match_date).max():%Y-%m}"
+
+    print("[2/11] đọc silver (nhóm mới: p22 odds handicap, p20 news, p16 injuries, p24 af, p09 fdo)")
+    ah_spreads, ah_totals = load_odds_handicap(store, alias)
+    dim_wiki = load_wiki_dim(store)
+    nb_daily = load_news_buzz(store, alias)
+    inj = load_injuries(store, alias)
+    af_fx = load_af_fixtures(store, alias)
+    af_stats_raw = load_af_stats(store, alias)
+    fdo = load_fdo(store, alias)
+
     con = duckdb.connect()
-    for name, df in (("m", m), ("odds", odds), ("ux", ux), ("pv", pv), ("wx", wx)): con.register(name, df)
-    for title, fn in [("[2/8] form / rolling", lambda: build_team_match(con)),
-                      ("[3/8] vị trí bảng trước trận", lambda: build_position(con)),
-                      ("[4/8] Elo", lambda: build_elo(con)),
-                      ("[5/8] market (odds)", lambda: build_market(con)),
-                      ("[6/8] xG", lambda: build_xg(con)),
-                      ("[7/8] attention + context", lambda: (build_attention(con), build_context(con, a.rain_mm))),
-                      ("[8/8] feature_match_ml", lambda: build_match_ml(con))]:
+    for name, df in (("m", m), ("odds", odds), ("ux", ux), ("pv", pv), ("wx", wx),
+                      ("ah_spreads", ah_spreads), ("ah_totals", ah_totals), ("nb", nb_daily),
+                      ("inj", inj), ("af_fx", af_fx), ("af_stats_raw", af_stats_raw), ("fdo", fdo)):
+        con.register(name, df)
+
+    for title, fn in [
+        ("[3/11] form / rolling", lambda: build_team_match(con)),
+        ("[4/11] vị trí bảng trước trận", lambda: build_position(con)),
+        ("[5/11] Elo", lambda: build_elo(con)),
+        ("[6/11] market (odds 1x2 + handicap/totals)", lambda: (build_market(con), build_market_ah(con))),
+        ("[7/11] xG", lambda: build_xg(con)),
+        ("[8/11] attention + context + news buzz + injuries", lambda: (
+            build_attention(con), build_context(con, a.rain_mm), build_news_buzz(con), build_injuries(con))),
+        ("[9/11] bắc cầu p24 (match_id <-> fixture_id) + rolling stats", lambda: (
+            build_af_bridge(con), build_af_stats_rolling(con))),
+        ("[10/11] đối chiếu p09 vs p03 (QA, không tạo feature)", lambda: qa_fdo_crosscheck(con, store)),
+        ("[11/11] feature_match_ml", lambda: build_match_ml(con)),
+    ]:
         print(title); fn()
+
     qa(con, xg_seasons)
     print("\n[ghi gold/features]")
     for t in ("feature_team_match", "feature_league_position", "feature_elo", "feature_market",
-              "feature_team_xg", "feature_team_attention", "feature_match_context", "feature_match_ml"):
+              "feature_team_xg", "feature_team_attention", "feature_match_context",
+              "feature_market_ah", "feature_team_news_buzz", "feature_team_injuries",
+              "feature_team_stats_af", "bridge_fd_af_match", "feature_match_ml"):
         store.write_parquet(f"{OUT}/{t}.parquet", con.execute(f"SELECT * FROM {t}").df())
     store.write_csv(f"{OUT}/_feature_catalog.csv", catalog(con))
+    if not dim_wiki.empty:
+        store.write_parquet(f"{DIM_OUT}/dim_team_wiki_profile.parquet", dim_wiki)
 
 
 if __name__ == "__main__":
