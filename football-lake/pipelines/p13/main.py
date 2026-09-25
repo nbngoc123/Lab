@@ -17,12 +17,15 @@ HOURLY_VARS = "temperature_2m,precipitation,windspeed_10m,relative_humidity_2m,w
 
 
 def fetch_historical(lat: float, lon: float, start: str, end: str) -> dict:
-    r = get(HIST_BASE, params={
-        "latitude": lat, "longitude": lon,
-        "start_date": start, "end_date": end,
-        "hourly": HOURLY_VARS, "timezone": "auto",
-    })
-    time.sleep(0.2)
+    from lake.http import SESSION
+    url = f"{HIST_BASE}?latitude={lat}&longitude={lon}&start_date={start}&end_date={end}&hourly={HOURLY_VARS}&timezone=auto"
+    r = SESSION.get(url)
+    if r.status_code == 429:
+        print("  ! 429 Rate limit, chờ 60s...")
+        time.sleep(60)
+        return fetch_historical(lat, lon, start, end)
+    r.raise_for_status()
+    time.sleep(2)
     return r.json()
 
 
