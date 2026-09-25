@@ -30,7 +30,7 @@ BASE       = "https://v3.football.api-sports.io"
 SRC        = "api-football"
 D          = today()
 LEAGUE     = 39          # Premier League
-SEASON     = 2025        # 2024/2025
+SEASON     = 2024        # 2024/2025
 TEST_MODE  = os.getenv("TEST_MODE") == "1"
 DAILY_BUDGET = 5 if TEST_MODE else 75        # Giới hạn 75/100 req/ngày (để an toàn dưới 100)
 CHECKPOINT_KEY = "_meta/api_football_p24/checkpoint.json"
