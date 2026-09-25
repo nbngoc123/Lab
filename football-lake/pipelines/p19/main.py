@@ -19,7 +19,8 @@ D   = today()
 
 # Tất cả 6 giải Understat hỗ trợ
 LEAGUES = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1", "RFPL"]
-SEASON  = "2025"   # năm bắt đầu mùa 2025/26
+SEASONS = ["2024", "2025"]   # Cào 2 mùa liền kề
+SEASON = None  # Sẽ được gán trong vòng lặp
 
 # TEST_MODE: True = chỉ lấy EPL (nhanh)
 # False = lấy cả 6 giải
@@ -213,33 +214,37 @@ def run_pipeline():
 
     leagues = ["EPL"] if TEST_MODE else LEAGUES
 
-    for league in leagues:
-        print(f"\n--- {league} ---")
-        try:
-            print(f"[1/4] players")
-            players = ingest_players(client, league)
-            build_player_xg(players, league)
+    for season in SEASONS:
+        global SEASON
+        SEASON = season
+        print(f"\n======== MÙA GIẢI {season} ========")
+        for league in leagues:
+            print(f"\n--- {league} ---")
+            try:
+                print(f"[1/4] players")
+                players = ingest_players(client, league)
+                build_player_xg(players, league)
 
-            print(f"[2/4] teams")
-            teams = ingest_teams(client, league)
-            build_team_xg(teams, league)
+                print(f"[2/4] teams")
+                teams = ingest_teams(client, league)
+                build_team_xg(teams, league)
 
-            print(f"[3/4] matches")
-            matches = ingest_matches(client, league)
-            build_match_xg(matches, league)
+                print(f"[3/4] matches")
+                matches = ingest_matches(client, league)
+                build_match_xg(matches, league)
 
-            if MAX_SHOT_MATCHES > 0:
-                print(f"[4/4] shot data (top {MAX_SHOT_MATCHES} trận đã đá)")
-                finished = [m["id"] for m in matches if m.get("isResult")]
-                shots_all = ingest_shots_for_matches(
-                    client, finished, league, max_matches=MAX_SHOT_MATCHES)
-                build_shots(shots_all, league)
-            else:
-                print("[4/4] shot data: bỏ qua (MAX_SHOT_MATCHES=0)")
+                if MAX_SHOT_MATCHES > 0:
+                    print(f"[4/4] shot data (top {MAX_SHOT_MATCHES} trận đã đá)")
+                    finished = [m["id"] for m in matches if m.get("isResult")]
+                    shots_all = ingest_shots_for_matches(
+                        client, finished, league, max_matches=MAX_SHOT_MATCHES)
+                    build_shots(shots_all, league)
+                else:
+                    print("[4/4] shot data: bỏ qua (MAX_SHOT_MATCHES=0)")
 
-        except Exception as e:
-            print(f"  ! Lỗi cho {league}: {e}")
-            continue
+            except Exception as e:
+                print(f"  ! Lỗi cho {league}: {e}")
+                continue
 
     print("\n[summary]")
     summary("bronze/understat/")
