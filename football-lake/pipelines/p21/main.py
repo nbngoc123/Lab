@@ -22,11 +22,14 @@ SRC = "youtube-api"
 D = today()
 
 YT_QUERIES = [
-    "Ngoại hạng Anh highlight", 
-    "Arsenal highlight", 
-    "Manchester United tin tức",
-    "Real Madrid highlight",
-    "Bóng đá Việt Nam highlight"
+    "Tin tức Ngoại hạng Anh", 
+    "Tin tức bóng đá La Liga", 
+    "Tin tức bóng đá Serie A",
+    "Tin tức bóng đá Bundesliga",
+    "Tin tức bóng đá Ligue 1",
+    "Điểm tin bóng đá thế giới",
+    "Highlight bóng đá quốc tế mới nhất",
+    "Bản tin bóng đá 24h"
 ]
 
 MAX_VIDEOS_PER_QUERY = 2 if TEST_MODE else 20
