@@ -807,7 +807,7 @@ def build_match_ml(con):
       {", ".join("mk." + c for c in MKT_COLS)},
       {", ".join(xg)}, {", ".join(att)},
       {", ".join("ah." + c for c in AH_COLS)},
-      {", ".join(news)}, {", ".join(inj)}, {, ".join(h2h)}, {", ".join(yt)}, {, {", ".join(afst)},
+      {", ".join(news)}, {", ".join(inj)}, {", ".join(h2h)}, {", ".join(yt)}, {", ".join(tac)}, {", ".join(spk)}, {", ".join(ref)}, {", ".join(dist)}, {", ".join(afst)},
       {", ".join("cx." + c for c in CTX_COLS)},
       m.result AS target, m.home_goals AS target_home_goals, m.away_goals AS target_away_goals,
       m.home_goals + m.away_goals AS target_total_goals,
