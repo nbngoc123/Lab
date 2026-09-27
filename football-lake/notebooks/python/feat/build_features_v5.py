@@ -478,14 +478,32 @@ def load_injuries(store, alias):
 
 
 def build_injuries(con):
-    con.execute("""
+    con.execute('''
     CREATE OR REPLACE TABLE feature_team_injuries AS
-    SELECT tm.match_id, tm.team_key, inj.ingest_date AS injury_asof_date,
-           inj.n_injured_players, inj.total_injuries
-    FROM tm
-    ASOF LEFT JOIN inj
-      ON tm.team_key = inj.team_key AND tm.match_date >= inj.ingest_date
-    """)
+    WITH player_xg_avg AS (
+        SELECT player_name, AVG(xG) as avg_xg
+        FROM uxp
+        GROUP BY player_name
+    ),
+    inj_with_xg AS (
+        SELECT i.fixture_date, i.team_key, i.player, 
+               COALESCE(px.avg_xg, 0.0) as missing_xg
+        FROM inj i
+        LEFT JOIN player_xg_avg px ON LOWER(i.player) = LOWER(px.player_name) 
+                                   OR LOWER(i.player) LIKE '%' || LOWER(px.player_name) || '%'
+    ),
+    tm_all AS (
+        SELECT match_id, home_key AS team_key, match_date FROM m
+        UNION ALL
+        SELECT match_id, away_key AS team_key, match_date FROM m
+    )
+    SELECT tm.match_id, tm.team_key,
+           count(DISTINCT i.player) AS n_injured_players,
+           SUM(i.missing_xg) AS missing_xg_impact
+    FROM tm_all tm
+    LEFT JOIN inj_with_xg i ON i.team_key = tm.team_key AND i.fixture_date <= tm.match_date AND i.fixture_date >= tm.match_date - 14
+    GROUP BY tm.match_id, tm.team_key
+    ''')
 
 
 # ---------------- p24: bắc cầu match_id (fd <-> api-football) + rolling stats (leakage-safe)
@@ -765,6 +783,134 @@ def build_context(con, rain_mm):
            CASE WHEN w.precip_mm IS NULL THEN NULL ELSE (w.precip_mm >= {rain_mm})::INT END AS is_raining
     FROM m LEFT JOIN wx w USING (match_id)
     """)
+
+
+
+def build_h2h(con):
+    con.execute('''
+    CREATE OR REPLACE TABLE feature_team_h2h AS
+    WITH h2h_history AS (
+        SELECT 
+            m1.match_id, 
+            m1.home_key AS team_key,
+            m1.away_key AS opp_key,
+            m2.match_date AS past_date,
+            CASE 
+                WHEN m2.home_key = m1.home_key AND m2.home_goals > m2.away_goals THEN 1
+                WHEN m2.away_key = m1.home_key AND m2.away_goals > m2.home_goals THEN 1
+                ELSE 0 END AS is_win,
+            CASE 
+                WHEN m2.home_key = m1.home_key THEN m2.home_goals
+                WHEN m2.away_key = m1.home_key THEN m2.away_goals
+                ELSE 0 END AS goals_scored
+        FROM m m1
+        JOIN m m2 ON m2.match_date < m1.match_date 
+                 AND ((m2.home_key = m1.home_key AND m2.away_key = m1.away_key) OR 
+                      (m2.home_key = m1.away_key AND m2.away_key = m1.home_key))
+    ),
+    h2h_ranked AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY match_id, team_key ORDER BY past_date DESC) as rn
+        FROM h2h_history
+    )
+    SELECT match_id, team_key,
+           AVG(is_win) AS h2h_win_rate_l5,
+           AVG(goals_scored) AS h2h_avg_goals_l5
+    FROM h2h_ranked
+    WHERE rn <= 5
+    GROUP BY match_id, team_key
+    ''')
+
+def build_youtube_sentiment(con):
+    con.execute('''
+    CREATE OR REPLACE TABLE feature_team_youtube AS
+    WITH yt_scored AS (
+        SELECT video_id, published_ts, text,
+               CASE 
+                 WHEN text ILIKE '%sack%' OR text ILIKE '%worst%' OR text ILIKE '%bad%' OR text ILIKE '%shit%' OR text ILIKE '%terrible%' THEN -1
+                 WHEN text ILIKE '%great%' OR text ILIKE '%best%' OR text ILIKE '%good%' OR text ILIKE '%amazing%' OR text ILIKE '%love%' THEN 1
+                 ELSE 0 END as sentiment
+        FROM ytc
+    ),
+    yt_agg AS (
+        SELECT v.query AS team_key, 
+               TRY_CAST(c.published_ts AS TIMESTAMP) AS comment_date,
+               c.sentiment
+        FROM yt_scored c
+        JOIN ytv v ON v.video_id = c.video_id
+    ),
+    team_match AS (
+        SELECT match_id, home_key AS team_key, match_date FROM m
+        UNION ALL
+        SELECT match_id, away_key AS team_key, match_date FROM m
+    )
+    SELECT tm.match_id, tm.team_key,
+           AVG(y.sentiment) AS yt_sentiment_ratio
+    FROM team_match tm
+    LEFT JOIN yt_agg y ON y.team_key = tm.team_key 
+                      AND y.comment_date < tm.match_date 
+                      AND y.comment_date >= tm.match_date - 7
+    GROUP BY tm.match_id, tm.team_key
+    ''')
+
+def build_tactical_and_physical(con):
+    con.execute('''
+    CREATE OR REPLACE TABLE feature_team_tactical AS
+    WITH b AS (SELECT match_id, fixture_id FROM bridge_fd_af_match),
+    lineup_clean AS (
+        SELECT l.fixture_id, l.team_id, l.player_id, l.formation, 
+               CAST(REPLACE(REPLACE(p.height, ' cm', ''), 'cm', '') AS FLOAT) as h,
+               CAST(REPLACE(REPLACE(p.weight, ' kg', ''), 'kg', '') AS FLOAT) as w,
+               CAST(p.age AS FLOAT) as age
+        FROM af_lineups l
+        JOIN af_players p ON p.player_id = l.player_id
+        WHERE l.role = 'XI' OR l.role IS NULL
+    ),
+    team_match AS (
+        SELECT m.match_id, m.home_key AS team_key, b.fixture_id FROM m JOIN b ON m.match_id = b.match_id
+        UNION ALL
+        SELECT m.match_id, m.away_key AS team_key, b.fixture_id FROM m JOIN b ON m.match_id = b.match_id
+    )
+    SELECT tm.match_id, tm.team_key,
+           AVG(lc.h) AS avg_height_cm,
+           AVG(lc.w) AS avg_weight_kg,
+           AVG(lc.age) AS avg_age,
+           ANY_VALUE(lc.formation) AS formation
+    FROM team_match tm
+    LEFT JOIN lineup_clean lc ON lc.fixture_id = tm.fixture_id
+    GROUP BY tm.match_id, tm.team_key
+    ''')
+
+def build_media_spikes(con):
+    con.execute('''
+    CREATE OR REPLACE TABLE feature_media_spikes AS
+    WITH tm AS (
+        SELECT m.match_id, m.home_key AS team_key, m.match_date FROM m
+        UNION ALL
+        SELECT m.match_id, m.away_key AS team_key, m.match_date FROM m
+    )
+    SELECT tm.match_id, tm.team_key,
+           MAX(CASE WHEN s.date >= tm.match_date - 7 AND s.date < tm.match_date THEN 1 ELSE 0 END) AS is_media_shock_active
+    FROM tm
+    LEFT JOIN pv_spikes s ON s.team_key = tm.team_key
+    GROUP BY tm.match_id, tm.team_key
+    ''')
+
+def build_referee(con):
+    con.execute('''
+    CREATE OR REPLACE TABLE feature_referee AS
+    WITH ref_history AS (
+        SELECT match_date, referee,
+               (COALESCE(home_goals,0) + COALESCE(away_goals,0)) as total_goals,
+               match_id
+        FROM m WHERE referee IS NOT NULL
+    ),
+    ref_rolling AS (
+        SELECT match_id, referee,
+               AVG(total_goals) OVER (PARTITION BY referee ORDER BY match_date ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) as referee_cards_pg
+        FROM ref_history
+    )
+    SELECT match_id, referee_cards_pg FROM ref_rolling
+    ''')
 
 
 def build_match_ml(con):
