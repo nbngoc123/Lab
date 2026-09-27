@@ -868,12 +868,11 @@ def catalog(con):
         for f in AF_FEATS: grp[f"{p}_{f}"] = "stats_af"
         for f in TACTICAL_FEATS: grp[f"{p}_{f}"] = "tactics"
         for f in SPIKE_FEATS: grp[f"{p}_{f}"] = "spikes"
-    for f in TACTICAL_DIFF: grp[f"diff_{f}"] = "tactics"
-    for f in REF_FEATS: grp[f] = "referee"
         for f in DIST_FEATS: grp[f"{p}_{f}"] = "distance"
-
         for f in H2H_FEATS: grp[f"{p}_{f}"] = "h2h"
         for f in YT_FEATS: grp[f"{p}_{f}"] = "youtube"
+    for f in TACTICAL_DIFF: grp[f"diff_{f}"] = "tactics"
+    for f in REF_FEATS: grp[f] = "referee"
 
     for f in FORM_DIFF: grp[f"diff_{f}"] = "form"
     for f in XG_DIFF: grp[f"diff_{f}"] = "xg"
