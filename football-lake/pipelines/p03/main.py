@@ -182,16 +182,42 @@ def build_odds(keys: dict):
 
         if missing_books:
             print(f"  ⚠ {div}/{season_label}: thiếu cột odds cho: {missing_books}")
-        if not rows:
-            continue
-        odds = pd.concat(rows, ignore_index=True)
-        # margin của nhà cái = tổng xác suất ngầm - 1
-        odds["implied_margin"] = (
-            1/odds.odds_home + 1/odds.odds_draw + 1/odds.odds_away - 1).round(4)
+        if rows:
+            odds = pd.concat(rows, ignore_index=True)
+            # margin của nhà cái = tổng xác suất ngầm - 1
+            odds["implied_margin"] = (
+                1/odds.odds_home + 1/odds.odds_draw + 1/odds.odds_away - 1).round(4)
+            put_parquet(
+                f"silver/odds/fd_odds/division={div}/season={season_label}/part-0.parquet",
+                odds, SRC)
 
-        put_parquet(
-            f"silver/odds/fd_odds/division={div}/season={season_label}/part-0.parquet",
-            odds, SRC)
+        # Parse Asian Handicap
+        if "AHh" in df.columns and "AvgAHH" in df.columns and "AvgAHA" in df.columns:
+            ah = pd.DataFrame({
+                "match_id": mid,
+                "bookmaker": "Avg",
+                "handicap_point": pd.to_numeric(df["AHh"], errors="coerce"),
+                "odds_home": pd.to_numeric(df["AvgAHH"], errors="coerce"),
+                "odds_away": pd.to_numeric(df["AvgAHA"], errors="coerce"),
+            }).dropna(subset=["handicap_point"])
+            if not ah.empty:
+                put_parquet(
+                    f"silver/odds/fd_odds_ah/division={div}/season={season_label}/part-0.parquet",
+                    ah, SRC)
+
+        # Parse Over/Under 2.5
+        if "Avg>2.5" in df.columns and "Avg<2.5" in df.columns:
+            ou = pd.DataFrame({
+                "match_id": mid,
+                "bookmaker": "Avg",
+                "total_point": 2.5,
+                "odds_over": pd.to_numeric(df["Avg>2.5"], errors="coerce"),
+                "odds_under": pd.to_numeric(df["Avg<2.5"], errors="coerce"),
+            }).dropna(subset=["odds_over"])
+            if not ou.empty:
+                put_parquet(
+                    f"silver/odds/fd_odds_ou/division={div}/season={season_label}/part-0.parquet",
+                    ou, SRC)
 
 
 if __name__ == "__main__":
@@ -210,4 +236,6 @@ if __name__ == "__main__":
 
     summary("bronze/football_data_couk/")
     summary("silver/matches/fd_matches/")
-    summary("silver/odds/")
+    summary("silver/odds/fd_odds/")
+    summary("silver/odds/fd_odds_ah/")
+    summary("silver/odds/fd_odds_ou/")

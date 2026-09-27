@@ -31,6 +31,7 @@ SRC        = "api-football"
 D          = today()
 LEAGUE     = 39          # Premier League
 SEASON     = 2024        # 2024/2025
+SEASONS    = [2022, 2023, 2024]
 TEST_MODE  = os.getenv("TEST_MODE") == "1"
 DAILY_BUDGET = 5 if TEST_MODE else 75        # Giới hạn 75/100 req/ngày (để an toàn dưới 100)
 CHECKPOINT_KEY = "_meta/api_football_p24/checkpoint.json"
@@ -106,14 +107,24 @@ def ingest_standings():
 
 
 def ingest_fixtures():
-    """Toàn bộ 380 trận (có kết quả + chưa đá)."""
-    body = call("/fixtures", {"league": LEAGUE, "season": SEASON})
-    put_json_gz(
-        f"bronze/api_football/fixtures/season={SEASON}/ingest_date={D}/fixtures.json.gz",
-        body, SRC, meta={"count": body["results"]}
-    )
-    print(f"  ✓ {body['results']} fixtures -> bronze")
-    return body
+    """Toàn bộ 380 trận (có kết quả + chưa đá) cho các mùa giải lịch sử."""
+    bodies = []
+    for s in SEASONS:
+        if _used >= DAILY_BUDGET:
+            break
+        key = f"bronze/api_football/fixtures/season={s}/ingest_date={D}/fixtures.json.gz"
+        # Tránh tải lại nếu đã tải hôm nay, HOẶC nếu đã có file fixtures cho mùa cũ (mùa cũ không thay đổi)
+        if s < 2024 and len(_list_bronze_keys(f"bronze/api_football/fixtures/season={s}/")) > 0:
+            print(f"  · fixtures mùa {s} đã cache, bỏ qua")
+            # Tải từ MinIO để return
+            bodies.append(read_json_gz(_list_bronze_keys(f"bronze/api_football/fixtures/season={s}/")[-1]))
+            continue
+            
+        body = call("/fixtures", {"league": LEAGUE, "season": s})
+        put_json_gz(key, body, SRC, meta={"count": body["results"]})
+        print(f"  ✓ {body['results']} fixtures mùa {s} -> bronze")
+        bodies.append(body)
+    return bodies
 
 
 def ingest_top_scorers():
@@ -162,35 +173,49 @@ def ingest_injuries():
 # ─── PLAYERS (profile + season stats) ────────────────────────────────────────
 def ingest_players_squad():
     """
-    Lấy danh sách cầu thủ EPL kèm thống kê mùa giải.
-    API trả về ~20 cầu thủ/page. Free tier: page 1 thôi (tiết kiệm quota).
-    Mỗi lần chạy tăng thêm 1 page, checkpoint bằng page đã lấy.
+    Backfill players theo danh sách player_id thực tế từ af_lineups.
     """
-    ck_key = "_meta/api_football_p24/players_checkpoint.json"
-    if exists(ck_key):
-        raw = S3.get_object(Bucket=BUCKET, Key=ck_key)["Body"].read()
-        last_page = json.loads(raw).get("last_page", 0)
-    else:
-        last_page = 0
-
-    page = last_page + 1
-    key = f"bronze/api_football/players/season={SEASON}/page={page}/players.json.gz"
-    if exists(key):
-        print(f"  · players page {page} đã cache, bỏ qua")
+    try:
+        from lake.minio_io import read_parquet
+        import io
+        raw_bytes = S3.get_object(Bucket=BUCKET, Key="silver/matches/af_lineups/season=2024/part-0.parquet")["Body"].read()
+        lineups = pd.read_parquet(io.BytesIO(raw_bytes))
+        needed_players = set(lineups["player_id"].dropna().unique())
+    except Exception as e:
+        print(f"  ! Lỗi đọc af_lineups: {e}")
         return
 
-    body = call("/players", {"league": LEAGUE, "season": SEASON, "page": page})
-    total_pages = (body.get("paging") or {}).get("total", 1)
-    put_json_gz(key, body, SRC, meta={"page": page, "total_pages": total_pages})
-    print(f"  ✓ players page {page}/{total_pages} -> bronze")
+    # Lọc những player đã có
+    existing_players = set()
+    for pk in _list_bronze_keys("bronze/api_football/players/"):
+        try:
+            body = read_json_gz(pk)
+            for item in body.get("response", []):
+                pid = item.get("player", {}).get("id")
+                if pid:
+                    existing_players.add(pid)
+        except:
+            pass
 
-    # Lưu checkpoint page
-    S3.put_object(
-        Bucket=BUCKET, Key=ck_key,
-        Body=json.dumps({"last_page": page, "total_pages": total_pages}).encode(),
-        ContentType="application/json"
-    )
-    return body, page, total_pages
+    missing_players = list(needed_players - existing_players)
+    print(f"  · Cần backfill {len(missing_players)} players")
+
+    for pid in missing_players:
+        if _used >= DAILY_BUDGET:
+            print("  · Hết budget khi backfill players")
+            break
+        
+        # Chỉ gọi 1 request cho player_id (season gần nhất để lấy profile)
+        # Ghi vào thư mục riêng theo player_id để dễ quản lý
+        key = f"bronze/api_football/players_by_id/player_id={pid}/player.json.gz"
+        if exists(key):
+            continue
+        try:
+            body = call("/players", {"id": int(pid), "season": SEASONS[-1]})
+            put_json_gz(key, body, SRC, meta={"player_id": pid})
+            print(f"  ✓ player {pid} -> bronze")
+        except Exception as e:
+            print(f"  ! Lỗi khi lấy player {pid}: {e}")
 
 
 # ─── BINARY MEDIA (logo + venue + player photo) ───────────────────────────────
@@ -300,30 +325,29 @@ def _list_bronze_keys(prefix: str) -> list:
     return keys
 
 
-def ingest_fixture_details(fixtures: dict, done: set) -> set:
+def ingest_fixture_details(fixtures_bodies: list, done: set) -> set:
     """
     Lấy Events + Lineups + Statistics cho mỗi trận đã đá xong (FT/AET/PEN).
     Dùng checkpoint để tiếp tục nếu bị ngắt giữa chừng.
     """
-    if not fixtures.get("response"):
-        print("  ! Không có fixtures")
-        return done
+    finished = []
+    for fixtures in fixtures_bodies:
+        if not fixtures.get("response"):
+            continue
+        for f in fixtures["response"]:
+            if f["fixture"]["status"]["short"] in ("FT", "AET", "PEN") and f["fixture"]["id"] not in done:
+                finished.append(f)
 
-    finished = [
-        f for f in fixtures["response"]
-        if f["fixture"]["status"]["short"] in ("FT", "AET", "PEN")
-        and f["fixture"]["id"] not in done
-    ]
     # Ưu tiên trận mới nhất trước
     finished.sort(key=lambda f: f["fixture"]["date"], reverse=True)
 
     print(f"  · {len(finished)} trận cần lấy chi tiết (đã có {len(done)} checkpoint)")
 
-    prefix = f"bronze/api_football/fixture_detail/season={SEASON}"
     for f in finished:
         fid = f["fixture"]["id"]
         home = f["teams"]["home"]["name"]
         away = f["teams"]["away"]["name"]
+        season = f["league"]["season"]
 
         # Mỗi trận cần 3 request (events + lineups + stats)
         if _used + 3 > DAILY_BUDGET:
@@ -337,11 +361,11 @@ def ingest_fixture_details(fixtures: dict, done: set) -> set:
             ]:
                 body = call(api_path, {"fixture": fid})
                 put_json_gz(
-                    f"{prefix}/fixture_id={fid}/{endpoint_name}.json.gz",
+                    f"bronze/api_football/fixture_detail/season={season}/fixture_id={fid}/{endpoint_name}.json.gz",
                     body, SRC, meta={"fixture_id": fid}
                 )
             done.add(fid)
-            print(f"  ✓ {home} vs {away} (id={fid})")
+            print(f"  ✓ {home} vs {away} (id={fid}, season={season})")
         except RuntimeError as e:
             print(f"  ! dừng: {e}")
             break
@@ -350,38 +374,43 @@ def ingest_fixture_details(fixtures: dict, done: set) -> set:
 
 
 # ─────────────────── SILVER ──────────────────────────────────────────────
-def build_silver_fixtures(fixtures: dict):
+def build_silver_fixtures(fixtures_bodies: list):
     """Kết quả từng trận -> silver."""
     rows = []
-    for item in fixtures.get("response", []):
-        fixt  = item["fixture"]
-        teams = item["teams"]
-        goals = item["goals"]
-        score = item["score"]
-        lg    = item["league"]
-        rows.append({
-            "fixture_id":    fixt["id"],
-            "date":          fixt["date"],
-            "status":        fixt["status"]["long"],
-            "round":         lg["round"],
-            "home_team_id":  teams["home"]["id"],
-            "home_team":     teams["home"]["name"],
-            "away_team_id":  teams["away"]["id"],
-            "away_team":     teams["away"]["name"],
-            "home_goals":    goals["home"],
-            "away_goals":    goals["away"],
-            "ht_home":       score["halftime"]["home"],
-            "ht_away":       score["halftime"]["away"],
-            "referee":       fixt.get("referee"),
-            "venue":         (fixt.get("venue") or {}).get("name"),
-        })
-    df = pd.DataFrame(rows)
-    df["ingest_date"] = D
-    put_parquet(
-        f"silver/matches/af_fixtures/season={SEASON}/ingest_date={D}/part-0.parquet",
-        df, SRC, meta={"rows": len(df)}
-    )
-    print(f"  ✓ {len(df)} fixtures -> silver")
+    for fixtures in fixtures_bodies:
+        for item in fixtures.get("response", []):
+            fixt  = item["fixture"]
+            teams = item["teams"]
+            goals = item["goals"]
+            score = item["score"]
+            lg    = item["league"]
+            rows.append({
+                "fixture_id":    fixt["id"],
+                "date":          fixt["date"],
+                "status":        fixt["status"]["long"],
+                "round":         lg["round"],
+                "home_team_id":  teams["home"]["id"],
+                "home_team":     teams["home"]["name"],
+                "away_team_id":  teams["away"]["id"],
+                "away_team":     teams["away"]["name"],
+                "home_goals":    goals["home"],
+                "away_goals":    goals["away"],
+                "ht_home":       score["halftime"]["home"],
+                "ht_away":       score["halftime"]["away"],
+                "referee":       fixt.get("referee"),
+                "venue":         (fixt.get("venue") or {}).get("name"),
+                "season":        lg["season"],
+            })
+    if rows:
+        df = pd.DataFrame(rows)
+        df["ingest_date"] = D
+        # Ghi đè file duy nhất để dễ đọc (hoặc partition theo season)
+        for s, group in df.groupby("season"):
+            put_parquet(
+                f"silver/matches/af_fixtures/season={s}/part-0.parquet",
+                group, SRC, meta={"rows": len(group)}
+            )
+        print(f"  ✓ {len(df)} fixtures -> silver")
 
 
 def build_silver_standings(body: dict):
@@ -419,9 +448,16 @@ def build_silver_events(done: set):
     """Events (bàn thắng, thẻ phạt, thay người) -> silver."""
     rows = []
     for fid in done:
-        key = f"bronze/api_football/fixture_detail/season={SEASON}/fixture_id={fid}/events.json.gz"
-        if not exists(key):
+        # Lấy file json.gz từ tất cả các season
+        # Tạm thời tìm bằng list_objects hoặc glob, nhưng để tối ưu ta lấy thẳng prefix
+        # Vì ta đã tải, ta sẽ tìm trong toàn bộ thư mục fixture_detail
+        pass
+    
+    # Để build toàn bộ silver, ta quyét toàn bộ bronze fixture_detail
+    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+        if not key.endswith("events.json.gz"):
             continue
+        fid = int(key.split("fixture_id=")[1].split("/")[0])
         for e in read_json_gz(key).get("response", []):
             rows.append({
                 "fixture_id":    fid,
@@ -439,7 +475,7 @@ def build_silver_events(done: set):
     if rows:
         df = pd.DataFrame(rows)
         put_parquet(
-            f"silver/matches/af_match_events/season={SEASON}/part-0.parquet",
+            f"silver/matches/af_match_events/part-0.parquet",
             df, SRC, meta={"fixtures": df["fixture_id"].nunique()}
         )
         print(f"  ✓ {len(df)} events ({df['fixture_id'].nunique()} trận) -> silver")
@@ -448,10 +484,10 @@ def build_silver_events(done: set):
 def build_silver_lineups(done: set):
     """Đội hình ra sân (11 người + dự bị) -> silver."""
     rows = []
-    for fid in done:
-        key = f"bronze/api_football/fixture_detail/season={SEASON}/fixture_id={fid}/lineups.json.gz"
-        if not exists(key):
+    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+        if not key.endswith("lineups.json.gz"):
             continue
+        fid = int(key.split("fixture_id=")[1].split("/")[0])
         for side in read_json_gz(key).get("response", []):
             team_name = side["team"]["name"]
             team_id   = side["team"]["id"]
@@ -475,7 +511,7 @@ def build_silver_lineups(done: set):
     if rows:
         df = pd.DataFrame(rows)
         put_parquet(
-            f"silver/matches/af_lineups/season={SEASON}/part-0.parquet",
+            f"silver/matches/af_lineups/part-0.parquet",
             df, SRC, meta={"fixtures": df["fixture_id"].nunique()}
         )
         print(f"  ✓ {len(df)} lineup rows ({df['fixture_id'].nunique()} trận) -> silver")
@@ -484,10 +520,10 @@ def build_silver_lineups(done: set):
 def build_silver_stats(done: set):
     """Thống kê đội bóng (shots, passes, ball possession...) -> silver."""
     rows = []
-    for fid in done:
-        key = f"bronze/api_football/fixture_detail/season={SEASON}/fixture_id={fid}/statistics.json.gz"
-        if not exists(key):
+    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+        if not key.endswith("statistics.json.gz"):
             continue
+        fid = int(key.split("fixture_id=")[1].split("/")[0])
         for side in read_json_gz(key).get("response", []):
             rec = {
                 "fixture_id": fid,
@@ -504,7 +540,7 @@ def build_silver_stats(done: set):
     if rows:
         df = pd.DataFrame(rows)
         put_parquet(
-            f"silver/matches/af_match_stats/season={SEASON}/part-0.parquet",
+            f"silver/matches/af_match_stats/part-0.parquet",
             df, SRC, meta={"fixtures": df["fixture_id"].nunique()}
         )
         print(f"  ✓ {len(df)} stats rows ({df['fixture_id'].nunique()} trận) -> silver")
@@ -537,11 +573,10 @@ def build_silver_top_scorers(body: dict):
         print(f"  ✓ {len(df)} top scorers -> silver")
 
 
-# ─── SILVER: players + media manifest ────────────────────────────────────────
 def build_silver_players():
     """Gộp tất cả pages players -> silver parquet."""
     rows = []
-    for pk in _list_bronze_keys(f"bronze/api_football/players/season={SEASON}/"):
+    for pk in _list_bronze_keys("bronze/api_football/players"):
         try:
             body = read_json_gz(pk)
         except Exception:
@@ -578,9 +613,11 @@ def build_silver_players():
             })
     if rows:
         df = pd.DataFrame(rows)
+        # Bỏ duplicate player_id vì lấy từ nhiều mùa hoặc cả /players_by_id và /players
+        df = df.drop_duplicates(subset=["player_id"], keep="last")
         df["ingest_date"] = D
         put_parquet(
-            f"silver/players/af_players/season={SEASON}/ingest_date={D}/part-0.parquet",
+            f"silver/players/af_players/part-0.parquet",
             df, SRC, meta={"rows": len(df)}
         )
         print(f"  ✓ {len(df)} players -> silver")

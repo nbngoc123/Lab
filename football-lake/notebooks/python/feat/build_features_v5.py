@@ -368,58 +368,45 @@ def load_weather(store):
                          "precip_mm": num(w, r).values, "wind_kmh": num(w, d).values})
 
 
-# ---------------- p22: odds handicap (spreads) & totals (over/under)
+# ---------------- p22 -> chuyển sang p03 (fd_odds_ah, fd_odds_ou)
 def load_odds_handicap(store, alias):
-    """silver/betting/odds_spreads, odds_totals (p22 - The Odds API).
-    match_id của Odds API KHÁC hẳn 'E0_...' của fd_matches -> join theo (home_key, away_key, ngày),
-    KHÔNG theo match_id. seed/team_alias.csv đã có sẵn source='odds' khớp tên đội của Odds API.
-    Giới hạn: bản free chỉ trả kèo trận SẮP diễn ra, không backfill lịch sử."""
+    """silver/odds/fd_odds_ah, fd_odds_ou (p03 - football-data.co.uk).
+    match_id giống 100% với fd_matches."""
     def _empty(cols): return pd.DataFrame(columns=cols)
-    sp = store.read_prefix("silver/betting/odds_spreads/")
+    sp = store.read_prefix("silver/odds/fd_odds_ah/")
     if sp.empty:
-        print("  ! không có odds_spreads -> ah_* sẽ NULL")
-        sp = _empty(["home_key", "away_key", "match_date", "side_key", "price", "point", "bookmaker"])
-    else:
-        sp = sp.copy()
-        sp["home_key"] = map_team(sp["home_team"], "odds", alias, "odds_spreads.home_team")
-        sp["away_key"] = map_team(sp["away_team"], "odds", alias, "odds_spreads.away_team")
-        sp["side_key"] = map_team(sp["team"], "odds", alias, "odds_spreads.team")
-        sp["match_date"] = pd.to_datetime(sp["commence_time"], errors="coerce").dt.date
-    tt = store.read_prefix("silver/betting/odds_totals/")
+        print("  ! không có fd_odds_ah -> ah_* sẽ NULL")
+        sp = _empty(["match_id", "handicap_point", "odds_home", "odds_away"])
+    
+    tt = store.read_prefix("silver/odds/fd_odds_ou/")
     if tt.empty:
-        print("  ! không có odds_totals -> ou_* sẽ NULL")
-        tt = _empty(["home_key", "away_key", "match_date", "name", "price", "point", "bookmaker"])
-    else:
-        tt = tt.copy()
-        tt["home_key"] = map_team(tt["home_team"], "odds", alias, "odds_totals.home_team")
-        tt["away_key"] = map_team(tt["away_team"], "odds", alias, "odds_totals.away_team")
-        tt["match_date"] = pd.to_datetime(tt["commence_time"], errors="coerce").dt.date
+        print("  ! không có fd_odds_ou -> ou_* sẽ NULL")
+        tt = _empty(["match_id", "total_point", "odds_over", "odds_under"])
+    
+    # Sort vả drop_duplicates giống các hàm load khác
+    if not sp.empty:
+        sp = sp.sort_values("_key" if "_key" in sp.columns else "match_id").drop_duplicates("match_id", keep="last")
+    if not tt.empty:
+        tt = tt.sort_values("_key" if "_key" in tt.columns else "match_id").drop_duplicates("match_id", keep="last")
+        
     return sp, tt
 
 
 def build_market_ah(con):
     con.execute("""
     CREATE OR REPLACE TABLE feature_market_ah AS
-    WITH sp AS (
-      SELECT home_key, away_key, match_date,
-             AVG(price) FILTER (WHERE side_key = home_key) AS ah_home_price_avg,
-             AVG(price) FILTER (WHERE side_key = away_key) AS ah_away_price_avg,
-             AVG(point) FILTER (WHERE side_key = home_key) AS ah_home_point_avg,
-             COUNT(DISTINCT bookmaker) AS ah_n_books
-      FROM ah_spreads GROUP BY 1, 2, 3),
-    tt AS (
-      SELECT home_key, away_key, match_date,
-             AVG(price) FILTER (WHERE name = 'Over')  AS ou_over_price_avg,
-             AVG(price) FILTER (WHERE name = 'Under') AS ou_under_price_avg,
-             AVG(point) AS ou_line_avg,
-             COUNT(DISTINCT bookmaker) AS ou_n_books
-      FROM ah_totals GROUP BY 1, 2, 3)
     SELECT m.match_id,
-           sp.ah_home_price_avg, sp.ah_away_price_avg, sp.ah_home_point_avg, sp.ah_n_books,
-           tt.ou_over_price_avg, tt.ou_under_price_avg, tt.ou_line_avg, tt.ou_n_books
+           sp.odds_home AS ah_home_price_avg, 
+           sp.odds_away AS ah_away_price_avg, 
+           sp.handicap_point AS ah_home_point_avg, 
+           1 AS ah_n_books,
+           tt.odds_over AS ou_over_price_avg, 
+           tt.odds_under AS ou_under_price_avg, 
+           tt.total_point AS ou_line_avg, 
+           1 AS ou_n_books
     FROM m
-    LEFT JOIN sp ON sp.home_key = m.home_key AND sp.away_key = m.away_key AND sp.match_date = m.match_date
-    LEFT JOIN tt ON tt.home_key = m.home_key AND tt.away_key = m.away_key AND tt.match_date = m.match_date
+    LEFT JOIN ah_spreads sp ON sp.match_id = m.match_id
+    LEFT JOIN ah_totals tt ON tt.match_id = m.match_id
     """)
 
 
@@ -584,6 +571,9 @@ def load_af_stats(store, alias):
         "possession_pct": num(s, poss).values, "shots_on_goal": num(s, "shots_on_goal").values,
         "total_shots": num(s, "total_shots").values, "corner_kicks": num(s, "corner_kicks").values,
         "fouls": num(s, "fouls").values})
+    
+    # Lọc duplicates do thay đổi cấu trúc partition của af_match_stats
+    out = out.drop_duplicates(["fixture_id", "team_key"], keep="last")
     return out
 
 
@@ -1210,6 +1200,10 @@ def qa(con, xg_seasons):
     n_m = con.execute("SELECT count(*) FROM m").fetchone()[0]
     for t in ("feature_elo", "feature_market", "feature_match_context", "feature_match_ml"):
         n, d = con.execute(f"SELECT count(*), count(DISTINCT match_id) FROM {t}").fetchone()
+        if n != d:
+            print(f"!!! DUPLICATES IN {t} !!!")
+            dupes = con.execute(f"SELECT match_id, COUNT(*) FROM {t} GROUP BY match_id HAVING COUNT(*) > 1").df()
+            print(dupes.head())
         assert n == d, f"{t}: match_id trùng"
         if t != "feature_market": assert n == n_m, f"{t} có {n} dòng, spine có {n_m}"
     for t in ("feature_team_match", "feature_league_position"):
