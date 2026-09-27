@@ -479,7 +479,6 @@ def load_injuries(store, alias):
 
 def build_injuries(con):
     try:
-        try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_injuries AS
     WITH player_xg_avg AS (
@@ -506,8 +505,6 @@ def build_injuries(con):
     LEFT JOIN inj_with_xg i ON i.team_key = tm.team_key AND i.fixture_date <= tm.match_date AND i.fixture_date >= tm.match_date - 14
     GROUP BY tm.match_id, tm.team_key
     ''')
-    except Exception as e:
-        con.execute("CREATE OR REPLACE TABLE feature_team_injuries AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS n_injured_players, CAST(0.0 AS FLOAT) AS missing_xg_impact FROM m WHERE 1=0")
     except Exception as e:
         con.execute("CREATE OR REPLACE TABLE feature_team_injuries AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS n_injured_players, CAST(0.0 AS FLOAT) AS missing_xg_impact FROM m WHERE 1=0")
 
@@ -794,7 +791,6 @@ def build_context(con, rain_mm):
 
 def build_h2h(con):
     try:
-        try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_h2h AS
     WITH h2h_history AS (
@@ -829,12 +825,9 @@ def build_h2h(con):
     ''')
     except Exception as e:
         con.execute("CREATE OR REPLACE TABLE feature_team_h2h AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS h2h_win_rate_l5, CAST(0.0 AS FLOAT) AS h2h_avg_goals_l5 FROM m WHERE 1=0")
-    except Exception as e:
-        con.execute("CREATE OR REPLACE TABLE feature_team_h2h AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS h2h_win_rate_l5, CAST(0.0 AS FLOAT) AS h2h_avg_goals_l5 FROM m WHERE 1=0")
 
 def build_youtube_sentiment(con):
     try:
-        try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_youtube AS
     WITH yt_scored AS (
@@ -867,12 +860,9 @@ def build_youtube_sentiment(con):
     ''')
     except Exception as e:
         con.execute("CREATE OR REPLACE TABLE feature_team_youtube AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS yt_sentiment_ratio FROM m WHERE 1=0")
-    except Exception as e:
-        con.execute("CREATE OR REPLACE TABLE feature_team_youtube AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS yt_sentiment_ratio FROM m WHERE 1=0")
 
 def build_tactical_and_physical(con):
     try:
-        try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_tactical AS
     WITH b AS (SELECT match_id, fixture_id FROM bridge_fd_af_match),
@@ -901,12 +891,9 @@ def build_tactical_and_physical(con):
     ''')
     except Exception as e:
         con.execute("CREATE OR REPLACE TABLE feature_team_tactical AS SELECT match_id, home_key AS team_key, CAST(180.0 AS FLOAT) AS avg_height_cm, CAST(75.0 AS FLOAT) AS avg_weight_kg, CAST(26.0 AS FLOAT) AS avg_age, CAST('4-3-3' AS VARCHAR) AS formation FROM m WHERE 1=0")
-    except Exception as e:
-        con.execute("CREATE OR REPLACE TABLE feature_team_tactical AS SELECT match_id, home_key AS team_key, CAST(180.0 AS FLOAT) AS avg_height_cm, CAST(75.0 AS FLOAT) AS avg_weight_kg, CAST(26.0 AS FLOAT) AS avg_age, CAST('4-3-3' AS VARCHAR) AS formation FROM m WHERE 1=0")
 
 def build_media_spikes(con):
     try:
-        try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_media_spikes AS
     WITH tm AS (
@@ -920,8 +907,6 @@ def build_media_spikes(con):
     LEFT JOIN pv_spikes s ON s.team_key = tm.team_key
     GROUP BY tm.match_id, tm.team_key
     ''')
-    except Exception as e:
-        con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
     except Exception as e:
         con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
 
