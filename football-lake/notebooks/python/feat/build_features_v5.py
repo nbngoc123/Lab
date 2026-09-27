@@ -478,7 +478,9 @@ def load_injuries(store, alias):
 
 
 def build_injuries(con):
-    con.execute('''
+    try:
+        try:
+        con.execute('''
     CREATE OR REPLACE TABLE feature_team_injuries AS
     WITH player_xg_avg AS (
         SELECT player_name, AVG(xG) as avg_xg
@@ -504,6 +506,10 @@ def build_injuries(con):
     LEFT JOIN inj_with_xg i ON i.team_key = tm.team_key AND i.fixture_date <= tm.match_date AND i.fixture_date >= tm.match_date - 14
     GROUP BY tm.match_id, tm.team_key
     ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_injuries AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS n_injured_players, CAST(0.0 AS FLOAT) AS missing_xg_impact FROM m WHERE 1=0")
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_injuries AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS n_injured_players, CAST(0.0 AS FLOAT) AS missing_xg_impact FROM m WHERE 1=0")
 
 
 # ---------------- p24: bắc cầu match_id (fd <-> api-football) + rolling stats (leakage-safe)
@@ -787,7 +793,9 @@ def build_context(con, rain_mm):
 
 
 def build_h2h(con):
-    con.execute('''
+    try:
+        try:
+        con.execute('''
     CREATE OR REPLACE TABLE feature_team_h2h AS
     WITH h2h_history AS (
         SELECT 
@@ -819,9 +827,15 @@ def build_h2h(con):
     WHERE rn <= 5
     GROUP BY match_id, team_key
     ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_h2h AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS h2h_win_rate_l5, CAST(0.0 AS FLOAT) AS h2h_avg_goals_l5 FROM m WHERE 1=0")
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_h2h AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS h2h_win_rate_l5, CAST(0.0 AS FLOAT) AS h2h_avg_goals_l5 FROM m WHERE 1=0")
 
 def build_youtube_sentiment(con):
-    con.execute('''
+    try:
+        try:
+        con.execute('''
     CREATE OR REPLACE TABLE feature_team_youtube AS
     WITH yt_scored AS (
         SELECT video_id, published_ts, text,
@@ -851,9 +865,15 @@ def build_youtube_sentiment(con):
                       AND y.comment_date >= tm.match_date - 7
     GROUP BY tm.match_id, tm.team_key
     ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_youtube AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS yt_sentiment_ratio FROM m WHERE 1=0")
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_youtube AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS yt_sentiment_ratio FROM m WHERE 1=0")
 
 def build_tactical_and_physical(con):
-    con.execute('''
+    try:
+        try:
+        con.execute('''
     CREATE OR REPLACE TABLE feature_team_tactical AS
     WITH b AS (SELECT match_id, fixture_id FROM bridge_fd_af_match),
     lineup_clean AS (
@@ -879,9 +899,15 @@ def build_tactical_and_physical(con):
     LEFT JOIN lineup_clean lc ON lc.fixture_id = tm.fixture_id
     GROUP BY tm.match_id, tm.team_key
     ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_tactical AS SELECT match_id, home_key AS team_key, CAST(180.0 AS FLOAT) AS avg_height_cm, CAST(75.0 AS FLOAT) AS avg_weight_kg, CAST(26.0 AS FLOAT) AS avg_age, CAST('4-3-3' AS VARCHAR) AS formation FROM m WHERE 1=0")
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_team_tactical AS SELECT match_id, home_key AS team_key, CAST(180.0 AS FLOAT) AS avg_height_cm, CAST(75.0 AS FLOAT) AS avg_weight_kg, CAST(26.0 AS FLOAT) AS avg_age, CAST('4-3-3' AS VARCHAR) AS formation FROM m WHERE 1=0")
 
 def build_media_spikes(con):
-    con.execute('''
+    try:
+        try:
+        con.execute('''
     CREATE OR REPLACE TABLE feature_media_spikes AS
     WITH tm AS (
         SELECT m.match_id, m.home_key AS team_key, m.match_date FROM m
@@ -894,6 +920,10 @@ def build_media_spikes(con):
     LEFT JOIN pv_spikes s ON s.team_key = tm.team_key
     GROUP BY tm.match_id, tm.team_key
     ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
 
 def build_referee(con):
     con.execute('''
@@ -911,6 +941,58 @@ def build_referee(con):
     )
     SELECT match_id, referee_cards_pg FROM ref_rolling
     ''')
+
+
+
+def build_distance(con):
+    try:
+        con.execute('''
+        CREATE OR REPLACE TABLE feature_distance AS
+        WITH match_stadium AS (
+            SELECT m.match_id, m.home_key, m.away_key, f.venue_name
+            FROM m JOIN bridge_fd_af_match b ON b.match_id = m.match_id
+            JOIN af_fx f ON f.fixture_id = b.fixture_id
+        ),
+        wd_clean AS (
+            SELECT lower(trim(venueLabel)) as v_name,
+                   TRY_CAST(lat AS FLOAT) as lat,
+                   TRY_CAST(lon AS FLOAT) as lon
+            FROM wd_stadiums
+        ),
+        match_with_coords AS (
+            SELECT ms.match_id, ms.home_key, ms.away_key,
+                   s.lat as match_lat, s.lon as match_lon
+            FROM match_stadium ms
+            LEFT JOIN wd_clean s ON s.v_name = lower(trim(ms.venue_name))
+        ),
+        team_home_stadium AS (
+            SELECT home_key as team_key, 
+                   MAX(match_lat) as home_lat, 
+                   MAX(match_lon) as home_lon
+            FROM match_with_coords
+            WHERE match_lat IS NOT NULL
+            GROUP BY home_key
+        ),
+        away_travel AS (
+            SELECT mc.match_id, mc.away_key as team_key,
+                   mc.match_lat, mc.match_lon,
+                   th.home_lat, th.home_lon
+            FROM match_with_coords mc
+            JOIN team_home_stadium th ON th.team_key = mc.away_key
+        )
+        SELECT match_id, team_key,
+               6371 * ACOS(
+                   LEAST(1.0, GREATEST(-1.0, 
+                       COS(RADIANS(home_lat)) * COS(RADIANS(match_lat)) * COS(RADIANS(match_lon) - RADIANS(home_lon)) +
+                       SIN(RADIANS(home_lat)) * SIN(RADIANS(match_lat))
+                   ))
+               ) AS travel_distance_km
+        FROM away_travel
+        UNION ALL
+        SELECT match_id, home_key AS team_key, 0.0 AS travel_distance_km FROM m
+        ''')
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_distance AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS travel_distance_km FROM m WHERE 1=0")
 
 
 def build_match_ml(con):
