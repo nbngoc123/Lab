@@ -911,21 +911,26 @@ def build_media_spikes(con):
         con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
 
 def build_referee(con):
-    con.execute('''
-    CREATE OR REPLACE TABLE feature_referee AS
-    WITH ref_history AS (
-        SELECT match_date, referee,
-               (COALESCE(home_goals,0) + COALESCE(away_goals,0)) as total_goals,
-               match_id
-        FROM m WHERE referee IS NOT NULL
-    ),
-    ref_rolling AS (
-        SELECT match_id, referee,
-               AVG(total_goals) OVER (PARTITION BY referee ORDER BY match_date ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) as referee_cards_pg
-        FROM ref_history
-    )
-    SELECT match_id, referee_cards_pg FROM ref_rolling
-    ''')
+    try:
+        con.execute('''
+        CREATE OR REPLACE TABLE feature_referee AS
+        WITH ref_history AS (
+            SELECT match_date, referee,
+                   (COALESCE(home_goals,0) + COALESCE(away_goals,0)) as total_goals,
+                   match_id
+            FROM m WHERE referee IS NOT NULL
+        ),
+        ref_rolling AS (
+            SELECT match_id, referee,
+                   AVG(total_goals) OVER (PARTITION BY referee ORDER BY match_date ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) as referee_cards_pg
+            FROM ref_history
+        )
+        SELECT match_id, referee_cards_pg FROM ref_rolling
+        ''')
+
+    except Exception as e:
+        con.execute("CREATE OR REPLACE TABLE feature_referee AS SELECT match_id, CAST(0.0 AS FLOAT) AS referee_cards_pg FROM m WHERE 1=0")
+
 
 
 
