@@ -133,6 +133,53 @@ def build_hourly_table(results: dict) -> pd.DataFrame:
     return df
 
 
+def build_hourly_table_from_minio() -> pd.DataFrame:
+    """Đọc thẳng bronze/open_meteo/historical/ từ MinIO thay vì nhận dict lớn qua XCom.
+    Dùng khi DAG không truyền results qua XCom để tránh ReadTimeout."""
+    import gzip, json, io as _io
+    from lake.minio_io import S3, BUCKET, list_keys
+
+    rows = []
+    prefix = "bronze/open_meteo/historical/"
+    for key, _ in list_keys(prefix):
+        if not key.endswith(".json.gz"):
+            continue
+        try:
+            raw = S3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+            body = json.loads(gzip.decompress(raw))
+        except Exception as e:
+            print(f"  ! Bỏ qua {key}: {e}")
+            continue
+        # lấy venue từ path: bronze/open_meteo/historical/venue=<name>/...
+        parts = key.split("/")
+        venue = next((p.replace("venue=", "") for p in parts if p.startswith("venue=")), "unknown")
+        venue = venue.replace("_", " ")
+        h = body.get("hourly", {})
+        times = h.get("time", [])
+        for i, t in enumerate(times):
+            rows.append({
+                "venue": venue, "datetime": t,
+                "temperature_c": h.get("temperature_2m", [None] * (i + 1))[i],
+                "precipitation_mm": h.get("precipitation", [None] * (i + 1))[i],
+                "windspeed_kmh": h.get("windspeed_10m", [None] * (i + 1))[i],
+                "humidity_pct": h.get("relative_humidity_2m", [None] * (i + 1))[i],
+                "weathercode": h.get("weathercode", [None] * (i + 1))[i],
+            })
+
+    if not rows:
+        print("  ! build_hourly_table_from_minio: không tìm thấy file bronze nào")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    # dedupe: giữ bản mới nhất nếu nhiều ingest_date
+    df = df.drop_duplicates(subset=["venue", "datetime"], keep="last")
+    print(f"  · build_hourly_table_from_minio: {len(df):,} giờ, {df['venue'].nunique()} sân")
+    put_parquet(f"silver/dim/om_venue_weather/ingest_date={D}/part-0.parquet",
+                df, SRC, meta={"venues": df.venue.nunique(), "hours": len(df)})
+    return df
+
+
 def join_weather_to_matches(weather: pd.DataFrame, stadiums: list):
     """
     Ghép thời tiết vào từng trỚn qua team_key chuẩn.
