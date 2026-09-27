@@ -18,9 +18,12 @@ BUCKET = os.getenv("MINIO_BUCKET", "football-lake")
 
 def client():
     """S3 client trỏ vào MinIO. path-style bắt buộc với MinIO local."""
+    endpoint = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+    if not endpoint.startswith("http"):
+        endpoint = "http://" + endpoint
     return boto3.client(
         "s3",
-        endpoint_url=os.getenv("MINIO_ENDPOINT", "http://localhost:9000"),
+        endpoint_url=endpoint,
         aws_access_key_id=os.getenv("MINIO_ACCESS_KEY"),
         aws_secret_access_key=os.getenv("MINIO_SECRET_KEY"),
         config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
