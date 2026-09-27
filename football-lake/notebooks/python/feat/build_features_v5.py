@@ -970,6 +970,8 @@ def main():
     for name, df in (("m", m), ("odds", odds), ("ux", ux), ("pv", pv), ("wx", wx),
                       ("ah_spreads", ah_spreads), ("ah_totals", ah_totals), ("nb", nb_daily),
                       ("inj", inj), ("uxp", uxp), ("ytc", ytc), ("ytv", ytv), ("af_fx", af_fx), ("af_stats_raw", af_stats_raw), ("af_lineups", af_lineups), ("af_players", af_players), ("pv_spikes", pv_spikes), ("wd_stadiums", wd_stadiums), ("fdo", fdo)):
+        if df.empty and len(df.columns) == 0:
+            df = pd.DataFrame(columns=['dummy_col'])
         con.register(name, df)
 
     for title, fn in [
