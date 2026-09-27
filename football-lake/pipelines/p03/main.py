@@ -15,7 +15,8 @@ BASE = "https://www.football-data.co.uk/mmz4281"
 
 # Backfill 10 mùa EPL + Championship
 # Mã mùa: "1516" = 2015/16, "2425" = 2024/25
-DIVISIONS = ["E0"] if TEST_MODE else ["E0", "E1"]   # E0=EPL, E1=Championship
+# E0=EPL, E1=Championship, SP1=La Liga, D1=Bundesliga, I1=Serie A, F1=Ligue 1
+DIVISIONS = ["E0"] if TEST_MODE else ["E0", "E1", "SP1", "D1", "I1", "F1"]
 SEASONS = ["2526"] if TEST_MODE else [
     "2021", "2122", "2223", "2324", "2425", "2526",
 ]
