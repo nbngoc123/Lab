@@ -237,6 +237,14 @@ def load_matches(store, alias, division):
     if "HS" not in raw.columns:
         print("  ! fd_matches KHÔNG có HS/HST/HC/HY... -> feature sút/phạt/thẻ sẽ NULL "
               "(cần thêm các cột này vào silver p03 nếu muốn dùng)")
+    # BUG ĐÃ SỬA: cột "Referee" CÓ THẬT trong silver/matches/fd_matches (xác nhận qua
+    # inspect_silver.ipynb) nhưng trước đây không được đưa vào `m` -> build_referee() tham
+    # chiếu m.referee sẽ ném "Binder Error: column referee not found", bị try/except nuốt lỗi
+    # và luôn trả bảng rỗng (100% missing), KHÔNG PHẢI do lỗi logic SQL bên trong.
+    ref_col = first_present(raw, ["Referee", "referee"])
+    m["referee"] = raw[ref_col].values if ref_col else None
+    if not ref_col:
+        print("  ! fd_matches không có cột Referee -> feature_referee sẽ NULL")
 
     m = m.dropna(subset=["match_date", "home_goals", "away_goals"]).copy()
     m["match_date"] = pd.to_datetime(m["match_date"]).dt.date
@@ -324,14 +332,27 @@ def load_pageviews(store, alias):
 
 
 def load_player_xg(store, alias):
-    df = store.read_prefix("players/understat_player_xg")
-    return df if not df.empty else pd.DataFrame()
+    # BUG ĐÃ SỬA: thiếu tiền tố "silver/" -> luôn đọc rỗng dù Silver có dữ liệu thật
+    # (silver/players/understat_player_xg/, xác nhận có 11 partition trong inspect_silver.ipynb)
+    df = store.read_prefix("silver/players/understat_player_xg/")
+    if df.empty:
+        print("  ! không có understat_player_xg -> missing_xg_impact sẽ NULL")
+        return pd.DataFrame(columns=["player_name", "xG"])
+    return df
 
 def load_youtube_data(store, alias):
-    ytc = store.read_prefix("text/youtube_comments")
-    ytv = store.read_prefix("text/youtube_videos")
-    if not ytv.empty:
-        ytv['query'] = ytv['query'].apply(lambda x: map_team(x, "youtube", alias, "YT")[0])
+    # BUG ĐÃ SỬA: thiếu tiền tố "silver/" -> luôn đọc rỗng dù Silver có dữ liệu thật
+    # (silver/text/youtube_comments/, silver/text/youtube_videos/, xác nhận có 5 partition mỗi bảng)
+    ytc = store.read_prefix("silver/text/youtube_comments/")
+    ytv = store.read_prefix("silver/text/youtube_videos/")
+    if ytv.empty or ytc.empty:
+        print("  ! không có youtube_videos/comments -> feature_team_youtube rỗng")
+        return (pd.DataFrame(columns=["video_id", "published_ts", "text"]),
+                pd.DataFrame(columns=["video_id", "query"]))
+    ytv = ytv.copy()
+    # map_team() trả về 1 Series, không phải list -> lấy .values, KHÔNG index [0]
+    # (bug cũ .apply(lambda x: map_team(...)[0]) chỉ lấy đúng 1 ký tự đầu của mỗi tên đội)
+    ytv["query"] = map_team(ytv["query"], "youtube", alias, "youtube_videos.query")
     return ytc, ytv
 
 def load_weather(store):
@@ -477,7 +498,29 @@ def load_injuries(store, alias):
     return agg.sort_values(["team_key", "ingest_date"])
 
 
+def load_af_injuries(store, alias):
+    """silver/players/af_injuries (p24): CHÍNH XÁC là nguồn mà build_injuries() cần — có
+    player, fixture_date, team theo TỪNG TRẬN. Trước đây build_injuries() bị wire nhầm sang
+    bảng `inj` (từ load_injuries() -> silver/players/pr_player_injuries), bảng này chỉ là
+    snapshot team-ngày (team, ingest_date, n_injured_players) -> KHÔNG có cột `fixture_date`
+    lẫn `player` -> mọi query tham chiếu i.fixture_date/i.player đều ném Binder Error, bị
+    try/except nuốt, luôn trả bảng rỗng (100% missing n_injured_players & missing_xg_impact)."""
+    a = store.read_prefix("silver/players/af_injuries/")
+    cols = ["team_key", "player", "fixture_date"]
+    if a.empty:
+        print("  ! không có af_injuries -> n_injured_players/missing_xg_impact sẽ NULL")
+        return pd.DataFrame(columns=cols)
+    a = a.copy()
+    a["team_key"] = map_team(a["team"], "apifootball", alias, "af_injuries.team")
+    a["fixture_date"] = pd.to_datetime(a["fixture_date"], errors="coerce").dt.date
+    out = a.dropna(subset=["fixture_date"])[["team_key", "player", "fixture_date"]]
+    print(f"  · af_injuries: {len(out):,} lượt chấn thương/{out['team_key'].nunique()} đội")
+    return out
+
+
 def build_injuries(con):
+    # BUG ĐÃ SỬA: đổi nguồn "inj" (pr_player_injuries, không có fixture_date/player) thành
+    # "af_inj" (af_injuries, ĐÚNG schema mà câu SQL này cần) — xem load_af_injuries() ở trên.
     try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_injuries AS
@@ -489,7 +532,7 @@ def build_injuries(con):
     inj_with_xg AS (
         SELECT i.fixture_date, i.team_key, i.player, 
                COALESCE(px.avg_xg, 0.0) as missing_xg
-        FROM inj i
+        FROM af_inj i
         LEFT JOIN player_xg_avg px ON LOWER(i.player) = LOWER(px.player_name) 
                                    OR LOWER(i.player) LIKE '%' || LOWER(px.player_name) || '%'
     ),
@@ -506,13 +549,14 @@ def build_injuries(con):
     GROUP BY tm.match_id, tm.team_key
     ''')
     except Exception as e:
+        print(f"  ⚠ build_injuries lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_team_injuries AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS n_injured_players, CAST(0.0 AS FLOAT) AS missing_xg_impact FROM m WHERE 1=0")
 
 
 # ---------------- p24: bắc cầu match_id (fd <-> api-football) + rolling stats (leakage-safe)
 def load_af_fixtures(store, alias):
     af = store.read_prefix("silver/matches/af_fixtures/")
-    cols = ["fixture_id", "home_key", "away_key", "match_date", "home_goals", "away_goals"]
+    cols = ["fixture_id", "home_key", "away_key", "match_date", "home_goals", "away_goals", "venue"]
     if af.empty:
         print("  ! không có af_fixtures -> không bắc cầu được"); return pd.DataFrame(columns=cols)
     af = af.sort_values("_key").drop_duplicates("fixture_id", keep="last").copy()
@@ -520,6 +564,10 @@ def load_af_fixtures(store, alias):
     af["away_key"] = map_team(af["away_team"], "apifootball", alias, "af_fixtures.away_team")
     dt = pd.to_datetime(af["date"], errors="coerce", utc=True)
     af["match_date"] = dt.dt.tz_localize(None).dt.date
+    # BỔ SUNG cột "venue": schema thật của af_fixtures dùng tên "venue" (không phải "venue_name")
+    # -> build_distance() cần cột này để nối sang wd_stadiums, trước đây bị loại bỏ khỏi output.
+    if "venue" not in af.columns:
+        af["venue"] = None
     return af[cols]
 
 
@@ -577,22 +625,44 @@ def build_af_stats_rolling(con):
 
 
 def load_wd_stadiums(store):
-    df = store.read_prefix("dim/wd_stadiums")
-    return df if not df.empty else pd.DataFrame()
+    # BUG ĐÃ SỬA: thiếu tiền tố "silver/" (silver/dim/wd_stadiums/, có 1 partition thật)
+    df = store.read_prefix("silver/dim/wd_stadiums/")
+    if df.empty:
+        print("  ! không có wd_stadiums -> travel_distance_km sẽ NULL")
+        return pd.DataFrame(columns=["venueLabel", "lon", "lat"])
+    return df
 
 def load_af_lineups(store, alias):
-    df = store.read_prefix("matches/af_lineups")
-    return df if not df.empty else pd.DataFrame()
+    # BUG ĐÃ SỬA: thiếu tiền tố "silver/" (silver/matches/af_lineups/, có 1 partition thật)
+    df = store.read_prefix("silver/matches/af_lineups/")
+    if df.empty:
+        print("  ! không có af_lineups -> avg_height_cm/formation sẽ NULL")
+        return pd.DataFrame(columns=["fixture_id", "team_id", "player_id", "formation", "role"])
+    return df
 
 def load_af_players(store, alias):
-    df = store.read_prefix("players/af_players")
-    return df if not df.empty else pd.DataFrame()
+    # BUG ĐÃ SỬA: thiếu tiền tố "silver/" (silver/players/af_players/, có 4 partition thật)
+    df = store.read_prefix("silver/players/af_players/")
+    if df.empty:
+        print("  ! không có af_players -> avg_height_cm/weight/age sẽ NULL")
+        return pd.DataFrame(columns=["player_id", "height", "weight", "age"])
+    return df
 
 def load_pageview_spikes(store, alias):
-    df = store.read_prefix("text/wm_pageview_spikes")
-    if not df.empty:
-        df["team_key"] = df["article"].apply(lambda x: map_team(x, "wiki", alias, "Spike")[0])
-    return df if not df.empty else pd.DataFrame()
+    # BUG ĐÃ SỬA (2 lỗi):
+    #  1) thiếu tiền tố "silver/" (silver/text/wm_pageview_spikes/, có 1 partition thật)
+    #  2) map_team() nhận cả cột (Series) rồi .map() nội bộ, KHÔNG gọi map_team(x,...)[0] theo
+    #     từng dòng — cách gọi cũ .apply(lambda x: map_team(x,...)[0]) sẽ ném AttributeError
+    #     ('str' object has no attribute 'map') ngay khi có dữ liệu, và [0] nếu không lỗi cũng
+    #     chỉ lấy 1 KÝ TỰ ĐẦU của tên đội chứ không phải cả team_key.
+    df = store.read_prefix("silver/text/wm_pageview_spikes/")
+    if df.empty:
+        print("  ! không có wm_pageview_spikes -> is_media_shock_active sẽ NULL")
+        return pd.DataFrame(columns=["team_key", "date"])
+    df = df.copy()
+    lab = "label" if "label" in df.columns else "article"
+    df["team_key"] = map_team(df[lab], "wikidata", alias, "wm_pageview_spikes.label")
+    return df
 
 def load_fdo(store, alias):
     f = store.read_prefix("silver/matches/fdo_matches/")
@@ -790,26 +860,42 @@ def build_context(con, rain_mm):
 
 
 def build_h2h(con):
+    # BUG ĐÃ SỬA: CTE h2h_history cũ CHỈ có "m1.home_key AS team_key" -> feature_team_h2h chỉ
+    # từng có dòng cho đội ĐANG ĐÁ SÂN NHÀ ở trận m1, không hề có dòng cho đội khách. Do đó khi
+    # build_match_ml JOIN "ah2h.team_key = m.away_key", vế away KHÔNG BAO GIỜ khớp được dòng nào
+    # -> away_h2h_win_rate_l5 / away_h2h_avg_goals_l5 / diff_h2h_* luôn NULL 100% (đã xác nhận
+    # đúng con số này trong football_gold_features_eda_v5.ipynb), trong khi home_h2h_* vẫn có dữ
+    # liệu thật (không phải lỗi SQL crash, không bị try/except bắt). Sửa bằng cách UNION ALL thêm
+    # lượt tính cho m1.away_key, coi đối thủ lịch sử là chính đội kia (không phân biệt sân nhà/
+    # khách của TRẬN QUÁ KHỨ m2, chỉ cần đúng cặp đấu).
     try:
         con.execute('''
     CREATE OR REPLACE TABLE feature_team_h2h AS
     WITH h2h_history AS (
-        SELECT 
-            m1.match_id, 
-            m1.home_key AS team_key,
-            m1.away_key AS opp_key,
-            m2.match_date AS past_date,
-            CASE 
-                WHEN m2.home_key = m1.home_key AND m2.home_goals > m2.away_goals THEN 1
-                WHEN m2.away_key = m1.home_key AND m2.away_goals > m2.home_goals THEN 1
-                ELSE 0 END AS is_win,
-            CASE 
-                WHEN m2.home_key = m1.home_key THEN m2.home_goals
-                WHEN m2.away_key = m1.home_key THEN m2.away_goals
-                ELSE 0 END AS goals_scored
+        SELECT m1.match_id, m1.home_key AS team_key, m1.away_key AS opp_key,
+               m2.match_date AS past_date,
+               CASE WHEN m2.home_key = m1.home_key AND m2.home_goals > m2.away_goals THEN 1
+                    WHEN m2.away_key = m1.home_key AND m2.away_goals > m2.home_goals THEN 1
+                    ELSE 0 END AS is_win,
+               CASE WHEN m2.home_key = m1.home_key THEN m2.home_goals
+                    WHEN m2.away_key = m1.home_key THEN m2.away_goals
+                    ELSE 0 END AS goals_scored
         FROM m m1
-        JOIN m m2 ON m2.match_date < m1.match_date 
-                 AND ((m2.home_key = m1.home_key AND m2.away_key = m1.away_key) OR 
+        JOIN m m2 ON m2.match_date < m1.match_date
+                 AND ((m2.home_key = m1.home_key AND m2.away_key = m1.away_key) OR
+                      (m2.home_key = m1.away_key AND m2.away_key = m1.home_key))
+        UNION ALL
+        SELECT m1.match_id, m1.away_key AS team_key, m1.home_key AS opp_key,
+               m2.match_date AS past_date,
+               CASE WHEN m2.home_key = m1.away_key AND m2.home_goals > m2.away_goals THEN 1
+                    WHEN m2.away_key = m1.away_key AND m2.away_goals > m2.home_goals THEN 1
+                    ELSE 0 END AS is_win,
+               CASE WHEN m2.home_key = m1.away_key THEN m2.home_goals
+                    WHEN m2.away_key = m1.away_key THEN m2.away_goals
+                    ELSE 0 END AS goals_scored
+        FROM m m1
+        JOIN m m2 ON m2.match_date < m1.match_date
+                 AND ((m2.home_key = m1.home_key AND m2.away_key = m1.away_key) OR
                       (m2.home_key = m1.away_key AND m2.away_key = m1.home_key))
     ),
     h2h_ranked AS (
@@ -824,6 +910,7 @@ def build_h2h(con):
     GROUP BY match_id, team_key
     ''')
     except Exception as e:
+        print(f"  ⚠ build_h2h lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_team_h2h AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS h2h_win_rate_l5, CAST(0.0 AS FLOAT) AS h2h_avg_goals_l5 FROM m WHERE 1=0")
 
 def build_youtube_sentiment(con):
@@ -859,6 +946,7 @@ def build_youtube_sentiment(con):
     GROUP BY tm.match_id, tm.team_key
     ''')
     except Exception as e:
+        print(f"  ⚠ build_youtube_sentiment lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_team_youtube AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS yt_sentiment_ratio FROM m WHERE 1=0")
 
 def build_tactical_and_physical(con):
@@ -890,6 +978,7 @@ def build_tactical_and_physical(con):
     GROUP BY tm.match_id, tm.team_key
     ''')
     except Exception as e:
+        print(f"  ⚠ build_tactical_and_physical lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_team_tactical AS SELECT match_id, home_key AS team_key, CAST(180.0 AS FLOAT) AS avg_height_cm, CAST(75.0 AS FLOAT) AS avg_weight_kg, CAST(26.0 AS FLOAT) AS avg_age, CAST('4-3-3' AS VARCHAR) AS formation FROM m WHERE 1=0")
 
 def build_media_spikes(con):
@@ -908,38 +997,49 @@ def build_media_spikes(con):
     GROUP BY tm.match_id, tm.team_key
     ''')
     except Exception as e:
+        print(f"  ⚠ build_media_spikes lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_media_spikes AS SELECT match_id, home_key AS team_key, CAST(0 AS BIGINT) AS is_media_shock_active FROM m WHERE 1=0")
 
 def build_referee(con):
+    # 2 BUG ĐÃ SỬA:
+    #  1) `m` trước đây không có cột `referee` (xem load_matches) -> "column referee not found"
+    #     bị try/except nuốt, luôn trả bảng rỗng. Nay `m` đã có `referee`, câu lệnh chạy được.
+    #  2) Công thức cũ AVG(total_goals) tính TRUNG BÌNH BÀN THẮNG của trận trọng tài đó cầm còi,
+    #     rồi gán tên cột là "referee_cards_pg" (thẻ/trận) -> SAI Ý NGHĨA hoàn toàn (lấy goals gán
+    #     nhãn cards). Sửa lại tính đúng tổng thẻ (vàng + 2*đỏ, cả 2 đội) mỗi trận trọng tài đó bắt.
     try:
         con.execute('''
         CREATE OR REPLACE TABLE feature_referee AS
         WITH ref_history AS (
-            SELECT match_date, referee,
-                   (COALESCE(home_goals,0) + COALESCE(away_goals,0)) as total_goals,
-                   match_id
+            SELECT match_date, referee, match_id,
+                   (COALESCE(h_yellow,0) + COALESCE(a_yellow,0)
+                    + 2*COALESCE(h_red,0) + 2*COALESCE(a_red,0)) AS total_cards
             FROM m WHERE referee IS NOT NULL
         ),
         ref_rolling AS (
             SELECT match_id, referee,
-                   AVG(total_goals) OVER (PARTITION BY referee ORDER BY match_date ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) as referee_cards_pg
+                   AVG(total_cards) OVER (PARTITION BY referee ORDER BY match_date
+                                           ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS referee_cards_pg
             FROM ref_history
         )
         SELECT match_id, referee_cards_pg FROM ref_rolling
         ''')
-
     except Exception as e:
+        print(f"  ⚠ build_referee lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_referee AS SELECT match_id, CAST(0.0 AS FLOAT) AS referee_cards_pg FROM m WHERE 1=0")
 
 
 
 
 def build_distance(con):
+    # BUG ĐÃ SỬA: schema thật af_fixtures dùng tên cột "venue", không phải "venue_name"
+    # -> "Binder Error: column f.venue_name not found", bị try/except nuốt, luôn trả rỗng.
+    # Đã bổ sung "venue" vào load_af_fixtures() ở trên và sửa lại tên cột tham chiếu tại đây.
     try:
         con.execute('''
         CREATE OR REPLACE TABLE feature_distance AS
         WITH match_stadium AS (
-            SELECT m.match_id, m.home_key, m.away_key, f.venue_name
+            SELECT m.match_id, m.home_key, m.away_key, f.venue AS venue_name
             FROM m JOIN bridge_fd_af_match b ON b.match_id = m.match_id
             JOIN af_fx f ON f.fixture_id = b.fixture_id
         ),
@@ -982,6 +1082,7 @@ def build_distance(con):
         SELECT match_id, home_key AS team_key, 0.0 AS travel_distance_km FROM m
         ''')
     except Exception as e:
+        print(f"  ⚠ build_distance lỗi thật: {e}")
         con.execute("CREATE OR REPLACE TABLE feature_distance AS SELECT match_id, home_key AS team_key, CAST(0.0 AS FLOAT) AS travel_distance_km FROM m WHERE 1=0")
 
 
@@ -1171,6 +1272,7 @@ def main():
     dim_wiki = load_wiki_dim(store)
     nb_daily = load_news_buzz(store, alias)
     inj = load_injuries(store, alias)
+    af_inj = load_af_injuries(store, alias)  # BỔ SUNG: nguồn đúng cho build_injuries() (xem hàm)
     uxp = load_player_xg(store, alias)
     ytc, ytv = load_youtube_data(store, alias)
 
@@ -1187,7 +1289,7 @@ def main():
     con = duckdb.connect()
     for name, df in (("m", m), ("odds", odds), ("ux", ux), ("pv", pv), ("wx", wx),
                       ("ah_spreads", ah_spreads), ("ah_totals", ah_totals), ("nb", nb_daily),
-                      ("inj", inj), ("uxp", uxp), ("ytc", ytc), ("ytv", ytv), ("af_fx", af_fx), ("af_stats_raw", af_stats_raw), ("af_lineups", af_lineups), ("af_players", af_players), ("pv_spikes", pv_spikes), ("wd_stadiums", wd_stadiums), ("fdo", fdo)):
+                      ("inj", inj), ("af_inj", af_inj), ("uxp", uxp), ("ytc", ytc), ("ytv", ytv), ("af_fx", af_fx), ("af_stats_raw", af_stats_raw), ("af_lineups", af_lineups), ("af_players", af_players), ("pv_spikes", pv_spikes), ("wd_stadiums", wd_stadiums), ("fdo", fdo)):
         if df.empty and len(df.columns) == 0:
             df = pd.DataFrame(columns=['dummy_col'])
         con.register(name, df)
