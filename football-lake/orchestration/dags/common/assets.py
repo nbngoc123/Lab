@@ -14,29 +14,29 @@ news_raw = Asset("minio://football-lake/raw/news")
 # ==========================================
 # RAW ASSETS (Snowflake)
 # ==========================================
-football_fixtures_raw = Asset("snowflake://FOOTBALL_DWH/RAW/FIXTURES")
-football_teams_raw = Asset("snowflake://FOOTBALL_DWH/RAW/TEAMS")
-football_players_raw = Asset("snowflake://FOOTBALL_DWH/RAW/PLAYERS")
+football_fixtures_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/FIXTURES")
+football_teams_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/TEAMS")
+football_players_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/PLAYERS")
 
-odds_raw = Asset("snowflake://FOOTBALL_DWH/RAW/ODDS")
+odds_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/ODDS")
 
 # ==========================================
 # STAGING ASSETS (dbt - Snowflake)
 # ==========================================
-stg_fixtures = Asset("snowflake://FOOTBALL_DWH/STAGING/STG_FIXTURES")
-stg_teams = Asset("snowflake://FOOTBALL_DWH/STAGING/STG_TEAMS")
-stg_odds = Asset("snowflake://FOOTBALL_DWH/STAGING/STG_ODDS")
+stg_fixtures = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_FIXTURES")
+stg_teams = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_TEAMS")
+stg_odds = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_ODDS")
 
 # ==========================================
 # CORE ASSETS (dbt - Snowflake)
 # ==========================================
-dim_team = Asset("snowflake://FOOTBALL_DWH/CORE/DIM_TEAM")
-dim_player = Asset("snowflake://FOOTBALL_DWH/CORE/DIM_PLAYER")
-fact_match = Asset("snowflake://FOOTBALL_DWH/CORE/FACT_MATCH")
-fact_odds = Asset("snowflake://FOOTBALL_DWH/CORE/FACT_ODDS")
+dim_team = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/DIM_TEAM")
+dim_player = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/DIM_PLAYER")
+fact_match = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/FACT_MATCH")
+fact_odds = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/FACT_ODDS")
 
 # ==========================================
 # MART ASSETS (dbt - Snowflake)
 # ==========================================
-football_obt = Asset("snowflake://FOOTBALL_DWH/MART/FOOTBALL_OBT")
-team_performance = Asset("snowflake://FOOTBALL_DWH/MART/TEAM_PERFORMANCE")
+football_obt = Asset("snowflake://my_account/FOOTBALL_DWH/MART/FOOTBALL_OBT")
+team_performance = Asset("snowflake://my_account/FOOTBALL_DWH/MART/TEAM_PERFORMANCE")
