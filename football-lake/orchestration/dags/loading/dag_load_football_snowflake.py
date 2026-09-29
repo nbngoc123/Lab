@@ -56,8 +56,8 @@ def transfer_minio_to_stage(prefix: str):
                 f.write(file_data)
                 
             # PUT lên Snowflake Internal Stage (@MINIO_RAW_STAGE/prefix/)
-            # Dùng file:// tuyệt đối
-            put_sql = f"PUT file://{local_file.resolve()} @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/{prefix} AUTO_COMPRESS=TRUE OVERWRITE=TRUE"
+            # Dùng file:// tuyệt đối và bao trong nháy đơn để tránh lỗi parse của Snowflake
+            put_sql = f"PUT 'file://{local_file.resolve()}' @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/{prefix} AUTO_COMPRESS=TRUE OVERWRITE=TRUE"
             cursor.execute(put_sql)
             
             # Xóa file local sau khi PUT xong
