@@ -142,19 +142,16 @@ def get_partitions() -> list[dict]:
     
     # 1. Pageviews cho Team
     for article, label in teams_run.items():
-        for lang in LANGUAGES:
-            partitions.append({"type": "team", "article": article, "label": label, "lang": lang})
+        partitions.append({"type": "team", "article": article, "label": label})
             
     # 2. Pageviews cho Player
     for article, label in players_run.items():
-        for lang in LANGUAGES:
-            partitions.append({"type": "player", "article": article, "label": label, "lang": lang})
+        partitions.append({"type": "player", "article": article, "label": label})
             
     # 3. Top daily viral
     for i in range(top_days):
         target = date.today() - timedelta(days=i+1)
-        for lang in LANGUAGES:
-            partitions.append({"type": "top_daily", "date": target.isoformat(), "lang": lang})
+        partitions.append({"type": "top_daily", "date": target.isoformat()})
             
     return partitions
 
@@ -175,28 +172,28 @@ def fetch_top(target_date: str, lang: str = "en") -> dict:
     time.sleep(0.3)
     return r.json()
 
-def ingest(partition: dict) -> str:
+def ingest(partition: dict) -> list[str]:
     ptype = partition["type"]
-    lang = partition["lang"]
+    keys = []
     
     if ptype in ("team", "player"):
         article = partition["article"]
-        key = f"raw/wikimedia_pageviews/per_article/entity={ptype}/lang={lang}/article={article}/ingest_date={D}/daily.json.gz"
-        if exists(key):
-            return key
-            
-        body = fetch_daily(article, lang)
-        if body:
-            n = len(body.get("items", []))
-            put_json_gz(key, body, SRC, meta={"article": article, "lang": lang, "days": n})
-        return key
+        for lang in LANGUAGES:
+            key = f"raw/wikimedia_pageviews/per_article/entity={ptype}/lang={lang}/article={article}/ingest_date={D}/daily.json.gz"
+            if not exists(key):
+                body = fetch_daily(article, lang)
+                if body:
+                    n = len(body.get("items", []))
+                    put_json_gz(key, body, SRC, meta={"article": article, "lang": lang, "days": n})
+            keys.append(key)
+        return keys
         
     elif ptype == "top_daily":
         target_date = partition["date"]
-        key = f"raw/wikimedia_pageviews/top_daily/lang={lang}/date={target_date}/top.json.gz"
-        if exists(key):
-            return key
-            
-        body = fetch_top(target_date, lang)
-        put_json_gz(key, body, SRC, meta={"date": target_date, "lang": lang})
-        return key
+        for lang in LANGUAGES:
+            key = f"raw/wikimedia_pageviews/top_daily/lang={lang}/date={target_date}/top.json.gz"
+            if not exists(key):
+                body = fetch_top(target_date, lang)
+                put_json_gz(key, body, SRC, meta={"date": target_date, "lang": lang})
+            keys.append(key)
+        return keys
