@@ -1,51 +1,95 @@
 ﻿import os
+import glob
 
-dags_dir = r"d:\O\DOC\Năm 4\Data Mining\football-lake\orchestration\dags\ingestion"
+# Thay thế bronze -> raw_in trong các file ingestion
+for f in glob.glob('orchestration/dags/ingestion/*.py'):
+    with open(f, 'r', encoding='utf-8') as file:
+        content = file.read()
+    if 'bronze' in content:
+        content = content.replace('football_fixtures_bronze', 'football_fixtures_raw_in')
+        content = content.replace('football_teams_bronze', 'football_teams_raw_in')
+        content = content.replace('football_players_bronze', 'football_players_raw_in')
+        content = content.replace('odds_bronze', 'odds_raw_in')
+        with open(f, 'w', encoding='utf-8') as file:
+            file.write(content)
 
-dag_template = '''from datetime import datetime
+# Phục hồi lại DAG dynamic
+dag_dynamic = \"\"\"import os
+from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.decorators import task
-from airflow.assets import Asset
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.sdk import Asset
 
-asset_bronze = Asset("minio://football-lake/bronze/{source_name}")
-
-with DAG(
-    dag_id="{dag_id}",
-    start_date=datetime(2023, 1, 1),
-    schedule='@daily',
-    catchup=False,
-    tags=["ingestion", "bronze", "{source_name}"],
-) as dag:
-
-    @task
-    def task_get_partitions():
-        from pipelines.{p_name}.main import {get_func}
-        return {get_func}()
-
-    @task(outlets=[asset_bronze])
-    def task_ingest(partition: dict):
-        from pipelines.{p_name}.main import {ingest_func}
-        return {ingest_func}(partition)
-
-    partitions = task_get_partitions()
-    ingest_tasks = task_ingest.expand(partition=partitions)
-'''
-
-dags = [
-    ("p10", "wikimedia", "dag_ingest_p10_wikimedia.py", "get_partitions", "ingest"),
-    ("p13", "open_meteo", "dag_ingest_p13_open_meteo.py", "get_partitions", "ingest"),
-    ("p16", "physioroom", "dag_ingest_p16_physioroom.py", "get_partitions", "ingest"),
-    ("p19", "understat", "dag_ingest_p19_understat.py", "get_partitions", "ingest"),
-    ("p20", "google_news", "dag_ingest_p20_google_news.py", "get_partitions_news", "ingest_news"),
-    ("p20", "wikipedia", "dag_ingest_p20_wikipedia.py", "get_partitions_wiki", "ingest_wiki"),
-    ("p21", "youtube", "dag_ingest_p21_youtube.py", "get_partitions", "ingest"),
-    ("p25", "football_news", "dag_ingest_p25_football_news.py", "get_partitions", "ingest"),
+SOURCES = [
+    ("p03_football_data_co_uk", "football_data_co_uk", "FOOTBALL_DATA_CO_UK", "football_data_co_uk"),
+    ("p06_wikidata", "wikidata", "WIKIDATA", "wikidata"),
+    ("p08_thesportsdb", "thesportsdb", "THESPORTSDB", "thesportsdb"),
+    ("p09_football_data_org", "football_data_org", "FOOTBALL_DATA_ORG", "football_data_org"),
+    ("p10_wikimedia", "wikimedia", "WIKIMEDIA", "wikimedia"),
+    ("p13_open_meteo", "open_meteo", "OPEN_METEO", "open_meteo"),
+    ("p16_physioroom", "physioroom", "PHYSIOROOM", "physioroom"),
+    ("p19_understat", "understat", "UNDERSTAT", "understat"),
+    ("p20_wikipedia", "wikipedia_articles", "WIKIPEDIA", "wikipedia"),
+    ("p20_google_news", "rss/google_news", "GOOGLE_NEWS", "google_news"),
+    ("p21_youtube", "youtube", "YOUTUBE", "youtube"),
+    ("p22_odds", "odds", "ODDS_API", "odds"),
+    ("p25_football_news", "football_news", "FOOTBALL_NEWS", "football_news"),
 ]
 
-for p, src, filename, get_f, in_f in dags:
-    content = dag_template.format(p_name=p, source_name=src, dag_id=filename.replace(".py", ""), get_func=get_f, ingest_func=in_f)
-    path = os.path.join(dags_dir, filename)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
 
-print("Updated DAGs to match new python modules.")
+for dag_suffix, minio_prefix, sf_table, asset_name in SOURCES:
+    dag_id = f"dag_load_{dag_suffix}_snowflake"
+    in_asset = Asset(f"minio://football-lake/raw/{asset_name}")
+    out_asset = Asset(f"snowflake://my_account/FOOTBALL_DWH/RAW/{sf_table}")
+    
+    sql_query = f'''
+    COPY INTO FOOTBALL_DWH.RAW.{sf_table} (RAW_DATA, INGEST_TIMESTAMP)
+    FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/{minio_prefix}/)
+    FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'
+    '''
+    dag = DAG(
+        dag_id=dag_id, default_args=default_args, schedule=[in_asset],
+        start_date=datetime(2023, 1, 1), catchup=False, tags=["loading", "snowflake", "raw", dag_suffix],
+    )
+    with dag:
+        load_task = SQLExecuteQueryOperator(task_id="load_to_snowflake", conn_id="snowflake_default", sql=sql_query, outlets=[out_asset])
+    globals()[dag_id] = dag
+
+# P24
+from common.assets import football_fixtures_raw_in, football_teams_raw_in, football_players_raw_in
+from common.assets import football_fixtures_raw, football_teams_raw, football_players_raw
+
+dag_p24 = DAG(
+    dag_id="dag_load_p24_api_football_snowflake", default_args=default_args,
+    schedule=(football_fixtures_raw_in & football_teams_raw_in & football_players_raw_in),
+    start_date=datetime(2023, 1, 1), catchup=False, tags=["loading", "snowflake", "raw", "p24_api_football"],
+)
+
+with dag_p24:
+    load_f = SQLExecuteQueryOperator(
+        task_id="load_fixtures", conn_id="snowflake_default",
+        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_FIXTURES (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/api_football/fixtures/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        outlets=[football_fixtures_raw]
+    )
+    load_t = SQLExecuteQueryOperator(
+        task_id="load_teams", conn_id="snowflake_default",
+        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_TEAMS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/api_football/teams/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        outlets=[football_teams_raw]
+    )
+    load_p = SQLExecuteQueryOperator(
+        task_id="load_players", conn_id="snowflake_default",
+        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_PLAYERS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/api_football/players_summary/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        outlets=[football_players_raw]
+    )
+globals()["dag_load_p24_api_football_snowflake"] = dag_p24
+\"\"\"
+with open('orchestration/dags/loading/dag_load_football_snowflake.py', 'w', encoding='utf-8') as f:
+    f.write(dag_dynamic)
+
+print('Fixed all DAGs')

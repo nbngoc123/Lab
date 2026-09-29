@@ -3,9 +3,9 @@ from airflow import DAG
 from airflow.decorators import task
 
 from common.assets import (
-    football_fixtures_bronze, 
-    football_teams_bronze, 
-    football_players_bronze
+    football_fixtures_raw_in, 
+    football_teams_raw_in, 
+    football_players_raw_in
 )
 
 default_args = {
@@ -31,17 +31,17 @@ with DAG(
         """Lấy danh sách các giải đấu cần fetch dữ liệu."""
         return [39, 140, 135, 78, 61]  # Anh, Tây Ban Nha, Ý, Đức, Pháp
 
-    @task(outlets=[football_teams_bronze])
+    @task(outlets=[football_teams_raw_in])
     def fetch_teams(league_id: int):
         from pipelines.p24.main import ingest_teams
         return ingest_teams(league_id)
 
-    @task(outlets=[football_fixtures_bronze])
+    @task(outlets=[football_fixtures_raw_in])
     def fetch_fixtures(league_id: int):
         from pipelines.p24.main import ingest_fixtures
         return ingest_fixtures(league_id)
 
-    @task(outlets=[football_players_bronze])
+    @task(outlets=[football_players_raw_in])
     def fetch_players(league_id: int):
         from pipelines.p24.main import ingest_players
         return ingest_players(league_id)

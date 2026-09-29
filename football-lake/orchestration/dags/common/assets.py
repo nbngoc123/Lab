@@ -1,24 +1,24 @@
 from airflow.sdk import Asset
 
 # ==========================================
-# raw ASSETS (MinIO Data Lake)
+# BRONZE ASSETS (MinIO Data Lake)
 # ==========================================
-football_fixtures_raw = Asset("minio://football-lake/raw/api_football/fixtures")
-football_teams_raw = Asset("minio://football-lake/raw/api_football/teams")
-football_players_raw = Asset("minio://football-lake/raw/api_football/players")
+football_fixtures_raw_in = Asset("minio://football-lake/raw/api_football/fixtures")
+football_teams_raw_in = Asset("minio://football-lake/raw/api_football/teams")
+football_players_raw_in = Asset("minio://football-lake/raw/api_football/players")
 
-odds_raw = Asset("minio://football-lake/raw/odds")
-reddit_raw = Asset("minio://football-lake/raw/reddit")
-news_raw = Asset("minio://football-lake/raw/news")
+odds_raw_in = Asset("minio://football-lake/raw/odds")
+reddit_raw_in = Asset("minio://football-lake/raw/reddit")
+news_raw_in = Asset("minio://football-lake/raw/news")
 
 # ==========================================
 # RAW ASSETS (Snowflake)
 # ==========================================
-football_fixtures_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/FIXTURES")
-football_teams_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/TEAMS")
-football_players_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/PLAYERS")
+football_fixtures_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_FIXTURES")
+football_teams_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_TEAMS")
+football_players_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_PLAYERS")
 
-odds_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/ODDS")
+odds_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/ODDS_API")
 
 # ==========================================
 # STAGING ASSETS (dbt - Snowflake)

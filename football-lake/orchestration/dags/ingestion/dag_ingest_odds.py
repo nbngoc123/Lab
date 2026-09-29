@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.decorators import task
-from common.assets import odds_bronze
+from common.assets import odds_raw_in
 
 default_args = {
     'owner': 'data_team',
@@ -25,7 +25,7 @@ with DAG(
         from pipelines.p22.main import get_partitions
         return get_partitions()
 
-    @task(outlets=[odds_bronze])
+    @task(outlets=[odds_raw_in])
     def task_ingest(partition: dict):
         from pipelines.p22.main import ingest
         return ingest(partition)
