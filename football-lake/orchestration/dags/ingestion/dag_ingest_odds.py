@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.decorators import task
+from common.assets import odds_bronze
 
 default_args = {
     'owner': 'data_team',
@@ -10,18 +11,18 @@ default_args = {
 }
 
 with DAG(
-    'p21_youtube_highlights',
+    'dag_ingest_odds',
     default_args=default_args,
-    description='Ingest YouTube highlights and comments (Daily)',
-    schedule='@daily',
+    description='Ingest betting odds from The Odds API (Hourly)',
+    schedule='@hourly',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['nlp', 'text', 'daily', 'p21', 'youtube'],
+    tags=['betting', 'odds', 'hourly', 'p22'],
 ) as dag:
 
-    @task
-    def task_ingest_youtube():
-        from pipelines.p21.main import run_pipeline
+    @task(outlets=[odds_bronze])
+    def task_ingest_odds():
+        from pipelines.p22.main import run_pipeline
         run_pipeline()
 
-    task_ingest_youtube()
+    task_ingest_odds()
