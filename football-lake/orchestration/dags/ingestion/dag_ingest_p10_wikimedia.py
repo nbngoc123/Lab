@@ -10,6 +10,7 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     schedule='@daily',
     catchup=False,
+    max_active_tasks=2,
     tags=["ingestion", "bronze", "wikimedia"],
 ) as dag:
 
