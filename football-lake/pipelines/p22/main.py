@@ -31,7 +31,7 @@ def ingest(partition: dict) -> str:
         raise ValueError("Thiếu ODDS_API_KEY trong .env")
         
     sport = partition["sport"]
-    key = f"bronze/odds/{sport}/ingest_date={D}/odds.json.gz"
+    key = f"raw/odds/{sport}/ingest_date={D}/odds.json.gz"
     
     if exists(key):
         print(f"  · {sport} đã có trong Data Lake ngày {D}, bỏ qua tải lại.")

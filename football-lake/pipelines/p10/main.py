@@ -181,7 +181,7 @@ def ingest(partition: dict) -> str:
     
     if ptype in ("team", "player"):
         article = partition["article"]
-        key = f"bronze/wikimedia_pageviews/per_article/entity={ptype}/lang={lang}/article={article}/ingest_date={D}/daily.json.gz"
+        key = f"raw/wikimedia_pageviews/per_article/entity={ptype}/lang={lang}/article={article}/ingest_date={D}/daily.json.gz"
         if exists(key):
             return key
             
@@ -193,7 +193,7 @@ def ingest(partition: dict) -> str:
         
     elif ptype == "top_daily":
         target_date = partition["date"]
-        key = f"bronze/wikimedia_pageviews/top_daily/lang={lang}/date={target_date}/top.json.gz"
+        key = f"raw/wikimedia_pageviews/top_daily/lang={lang}/date={target_date}/top.json.gz"
         if exists(key):
             return key
             

@@ -26,7 +26,7 @@ def get_partitions() -> list[dict]:
 def ingest(partition: dict) -> str:
     league_name = partition["name"]
     slug = partition["slug"]
-    key = f"bronze/thesportsdb/teams/league={slug}/ingest_date={D}/teams.json.gz"
+    key = f"raw/thesportsdb/teams/league={slug}/ingest_date={D}/teams.json.gz"
     
     if exists(key):
         return key

@@ -26,7 +26,7 @@ def ingest(partition: dict) -> str:
     """
     div = partition["division"]
     season = partition["season"]
-    key = f"bronze/football_data_couk/{div}/season={season}/{div}.csv"
+    key = f"raw/football_data_couk/{div}/season={season}/{div}.csv"
     
     if exists(key):
         print(f"  · {div}/{season} đã có trong Data Lake, bỏ qua tải lại.")

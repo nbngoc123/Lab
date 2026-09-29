@@ -1,4 +1,4 @@
-"""Ingest Fantasy Premier League API vào MinIO bronze + silver."""
+"""Ingest Fantasy Premier League API vào MinIO raw + silver."""
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -17,14 +17,14 @@ SEASON = "2025-26"          # đổi theo mùa hiện tại
 # ---------- BRONZE ----------
 def ingest_bootstrap() -> dict:
     data = get(f"{BASE}/bootstrap-static/").json()
-    put_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz",
+    put_json_gz(f"raw/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz",
                 data, SRC, meta={"players": len(data["elements"])})
     return [e["id"] for e in data["elements"]]
 
 
 def ingest_fixtures() -> list:
     data = get(f"{BASE}/fixtures/").json()
-    put_json_gz(f"bronze/fpl/fixtures/ingest_date={D}/fixtures.json.gz",
+    put_json_gz(f"raw/fpl/fixtures/ingest_date={D}/fixtures.json.gz",
                 data, SRC, meta={"fixtures": len(data)})
 
 
@@ -38,24 +38,24 @@ def ingest_player_histories(player_ids, sleep=0.25):
             print(f"  ! player {pid} lỗi: {e}")
             continue
         put_json_gz(
-            f"bronze/fpl/element_summary/ingest_date={D}/player_id={pid:04d}.json.gz",
+            f"raw/fpl/element_summary/ingest_date={D}/player_id={pid:04d}.json.gz",
             data, SRC, meta={"gw_rows": len(data.get("history", []))})
         ok += 1
         if i % 50 == 0:
             print(f"  ... {i}/{len(player_ids)}")
         time.sleep(sleep)      # lịch sự với server, tránh bị chặn IP
-    print(f"[bronze] element_summary: {ok}/{len(player_ids)} cầu thủ")
+    print(f"[raw] element_summary: {ok}/{len(player_ids)} cầu thủ")
 
 
 def ingest_live_gw(gw: int):
     data = get(f"{BASE}/event/{gw}/live/").json()
-    put_json_gz(f"bronze/fpl/event_live/ingest_date={D}/gw={gw:02d}.json.gz",
+    put_json_gz(f"raw/fpl/event_live/ingest_date={D}/gw={gw:02d}.json.gz",
                 data, SRC)
 
 
 # ---------- SILVER ----------
 def build_player_dim():
-    bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+    bootstrap = read_json_gz(f"raw/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
     teams = {t["id"]: t["name"] for t in bootstrap["teams"]}
     pos = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
 
@@ -83,12 +83,12 @@ def build_player_dim():
 def build_player_gw_fact(player_ids=None):
     """Gộp history từng GW của mọi cầu thủ thành 1 fact table."""
     if not player_ids:
-        bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+        bootstrap = read_json_gz(f"raw/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
         player_ids = [e["id"] for e in bootstrap["elements"]]
         
     rows = []
     for pid in player_ids:
-        key = f"bronze/fpl/element_summary/ingest_date={D}/player_id={pid:04d}.json.gz"
+        key = f"raw/fpl/element_summary/ingest_date={D}/player_id={pid:04d}.json.gz"
         try:
             data = read_json_gz(key)
         except Exception:
@@ -122,8 +122,8 @@ def build_player_gw_fact(player_ids=None):
 
 
 def build_fixtures():
-    bootstrap = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
-    fixtures = read_json_gz(f"bronze/fpl/fixtures/ingest_date={D}/fixtures.json.gz")
+    bootstrap = read_json_gz(f"raw/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+    fixtures = read_json_gz(f"raw/fpl/fixtures/ingest_date={D}/fixtures.json.gz")
     teams = {t["id"]: t["name"] for t in bootstrap["teams"]}
     df = pd.DataFrame(fixtures)[[
         "id", "event", "kickoff_time", "team_h", "team_a",
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     ingest_player_histories(pids)
 
     print("[4/5] live gameweek")
-    bs = read_json_gz(f"bronze/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
+    bs = read_json_gz(f"raw/fpl/bootstrap_static/ingest_date={D}/bootstrap.json.gz")
     current = next((e["id"] for e in bs["events"] if e["is_current"]), 1)
     ingest_live_gw(current)
 
@@ -160,5 +160,5 @@ if __name__ == "__main__":
     build_player_gw_fact(pids)
     build_fixtures()
 
-    summary("bronze/fpl/")
+    summary("raw/fpl/")
     summary("silver/players/")

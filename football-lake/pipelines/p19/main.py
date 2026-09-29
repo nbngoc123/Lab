@@ -44,7 +44,7 @@ def ingest(partition: dict) -> str:
     print(f"\n--- Ingesting {league} / {season} ---")
 
     # 1. Players
-    p_key = f"bronze/understat/players/league={league}/season={season}/ingest_date={D}/players.json.gz"
+    p_key = f"raw/understat/players/league={league}/season={season}/ingest_date={D}/players.json.gz"
     if not exists(p_key):
         players = client.league(league=league).get_player_data(season=season)
         put_json_gz(p_key, players, SRC, meta={"count": len(players)})
@@ -53,7 +53,7 @@ def ingest(partition: dict) -> str:
         print(f"  · players đã có")
 
     # 2. Teams
-    t_key = f"bronze/understat/teams/league={league}/season={season}/ingest_date={D}/teams.json.gz"
+    t_key = f"raw/understat/teams/league={league}/season={season}/ingest_date={D}/teams.json.gz"
     if not exists(t_key):
         teams = client.league(league=league).get_team_data(season=season)
         put_json_gz(t_key, teams, SRC, meta={"count": len(teams)})
@@ -62,7 +62,7 @@ def ingest(partition: dict) -> str:
         print(f"  · teams đã có")
 
     # 3. Matches
-    m_key = f"bronze/understat/matches/league={league}/season={season}/ingest_date={D}/matches.json.gz"
+    m_key = f"raw/understat/matches/league={league}/season={season}/ingest_date={D}/matches.json.gz"
     matches = None
     if not exists(m_key):
         matches = client.league(league=league).get_match_data(season=season)
@@ -80,7 +80,7 @@ def ingest(partition: dict) -> str:
         finished = [m["id"] for m in matches if m.get("isResult")]
         shots_all = []
         for mid in finished[:MAX_SHOT_MATCHES]:
-            s_key = f"bronze/understat/shots/league={league}/season={season}/match_id={mid}/shots.json.gz"
+            s_key = f"raw/understat/shots/league={league}/season={season}/match_id={mid}/shots.json.gz"
             if exists(s_key):
                 continue
             try:

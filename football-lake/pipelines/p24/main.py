@@ -45,7 +45,7 @@ def call_api(path: str, params: dict) -> dict:
 # ---------------------------------------------------------
 
 def ingest_teams(league_id: int) -> str:
-    key = f"bronze/api_football/teams/league={league_id}/season={SEASON}/teams.json.gz"
+    key = f"raw/api_football/teams/league={league_id}/season={SEASON}/teams.json.gz"
     if exists(key):
         print(f"  · Teams cho giải {league_id} đã có, bỏ qua")
         return key
@@ -57,7 +57,7 @@ def ingest_teams(league_id: int) -> str:
 
 def ingest_fixtures(league_id: int) -> str:
     # Lấy fixtures (lịch thi đấu & kết quả) cho giải đấu hiện tại
-    key = f"bronze/api_football/fixtures/league={league_id}/season={SEASON}/ingest_date={D}/fixtures.json.gz"
+    key = f"raw/api_football/fixtures/league={league_id}/season={SEASON}/ingest_date={D}/fixtures.json.gz"
     if exists(key):
         return key
 
@@ -66,7 +66,7 @@ def ingest_fixtures(league_id: int) -> str:
     print(f"  ✓ Đã lấy fixtures cho giải {league_id}")
     
     # Lấy luôn Standings
-    std_key = f"bronze/api_football/standings/league={league_id}/season={SEASON}/ingest_date={D}/standings.json.gz"
+    std_key = f"raw/api_football/standings/league={league_id}/season={SEASON}/ingest_date={D}/standings.json.gz"
     std_body = call_api("/standings", {"league": league_id, "season": SEASON})
     put_json_gz(std_key, std_body, SRC, meta={"league": league_id})
     print(f"  ✓ Đã lấy standings cho giải {league_id}")
@@ -76,7 +76,7 @@ def ingest_fixtures(league_id: int) -> str:
 def ingest_players(league_id: int) -> str:
     # API-Football lấy players rất tốn quota vì phải phân trang.
     # Nên cẩn thận khi dùng trong vòng lặp. Để ví dụ, lấy page 1.
-    key = f"bronze/api_football/players_summary/league={league_id}/season={SEASON}/ingest_date={D}/players.json.gz"
+    key = f"raw/api_football/players_summary/league={league_id}/season={SEASON}/ingest_date={D}/players.json.gz"
     if exists(key):
         return key
         

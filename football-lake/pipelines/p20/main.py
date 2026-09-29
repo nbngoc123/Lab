@@ -71,7 +71,7 @@ def ingest_wiki(partition: dict) -> str:
     lang = partition["lang"]
     
     safe_title = re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_")
-    key = f"bronze/wikipedia_articles/entity={entity_type}/lang={lang}/article={safe_title}/fetched_date={D}/content.json.gz"
+    key = f"raw/wikipedia_articles/entity={entity_type}/lang={lang}/article={safe_title}/fetched_date={D}/content.json.gz"
     
     if exists(key):
         print(f"  · [Wiki] {title} ({lang}) đã có.")
@@ -121,7 +121,7 @@ def ingest_news(partition: dict) -> str:
     q = urllib.parse.quote(q_cfg["q"])
     safe_q = re.sub(r"[^a-zA-Z0-9]+", "_", q_cfg["q"]).strip("_")
     
-    key = f"bronze/rss/google_news/query={safe_q}/lang={q_cfg['lang']}/ingest_date={D}/entries.jsonl.gz"
+    key = f"raw/rss/google_news/query={safe_q}/lang={q_cfg['lang']}/ingest_date={D}/entries.jsonl.gz"
     if exists(key):
         print(f"  · [News] {q_cfg['q']} ({q_cfg['lang']}) đã có.")
         return key

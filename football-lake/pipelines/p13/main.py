@@ -91,7 +91,7 @@ def ingest(partition: dict) -> str:
     end = "2024-08-02" if TEST_MODE else "2026-06-01"
     
     # Lấy lịch sử
-    hist_key = f"bronze/open_meteo/historical/venue={venue_safe}/ingest_date={D}/weather.json.gz"
+    hist_key = f"raw/open_meteo/historical/venue={venue_safe}/ingest_date={D}/weather.json.gz"
     if not exists(hist_key):
         body_hist = fetch_historical(lat, lon, start, end)
         put_json_gz(hist_key, body_hist, SRC, meta={"venue": venue, "lat": lat, "lon": lon})
@@ -100,7 +100,7 @@ def ingest(partition: dict) -> str:
         print(f"  · {venue} lịch sử đã có")
         
     # Lấy dự báo
-    fcast_key = f"bronze/open_meteo/forecast/venue={venue_safe}/ingest_date={D}/forecast.json.gz"
+    fcast_key = f"raw/open_meteo/forecast/venue={venue_safe}/ingest_date={D}/forecast.json.gz"
     if not exists(fcast_key):
         body_fcast = fetch_forecast(lat, lon)
         put_json_gz(fcast_key, body_fcast, SRC, meta={"venue": venue})

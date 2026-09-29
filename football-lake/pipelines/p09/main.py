@@ -23,7 +23,7 @@ def call(path: str) -> dict:
 
 def ingest(partition: dict) -> str:
     comp = partition["competition"]
-    key = f"bronze/football_data_org/matches/comp={comp}/ingest_date={D}/matches.json.gz"
+    key = f"raw/football_data_org/matches/comp={comp}/ingest_date={D}/matches.json.gz"
     
     if exists(key):
         return key

@@ -33,7 +33,7 @@ def ingest(partition: dict) -> str:
         return ""
         
     safe_q = query.replace(' ', '_').lower()
-    key = f"bronze/football_news/search_{safe_q}/ingest_date={D}/news.json.gz"
+    key = f"raw/football_news/search_{safe_q}/ingest_date={D}/news.json.gz"
     
     if exists(key):
         print(f"  · [News API] '{query}' đã có.")

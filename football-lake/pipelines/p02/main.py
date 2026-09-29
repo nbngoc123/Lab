@@ -59,7 +59,7 @@ def save_checkpoint(done: set):
 
 # ---------- BRONZE ----------
 def ingest_teams():
-    key = f"bronze/api_football/teams/season={SEASON}/teams.json.gz"
+    key = f"raw/api_football/teams/season={SEASON}/teams.json.gz"
     if exists(key):
         print("  · teams đã có, bỏ qua (tiết kiệm quota)")
         return read_json_gz(key)
@@ -71,7 +71,7 @@ def ingest_teams():
 def ingest_standings():
     body = call("/standings", {"league": LEAGUE, "season": SEASON})
     put_json_gz(
-        f"bronze/api_football/standings/ingest_date={D}/standings.json.gz",
+        f"raw/api_football/standings/ingest_date={D}/standings.json.gz",
         body, SRC)
     return body
 
@@ -79,7 +79,7 @@ def ingest_standings():
 def ingest_fixtures():
     body = call("/fixtures", {"league": LEAGUE, "season": SEASON})
     put_json_gz(
-        f"bronze/api_football/fixtures/season={SEASON}/ingest_date={D}/fixtures.json.gz",
+        f"raw/api_football/fixtures/season={SEASON}/ingest_date={D}/fixtures.json.gz",
         body, SRC, meta={"count": body["results"]})
     return body
 
@@ -95,7 +95,7 @@ def ingest_fixture_details(fixtures: dict, done: set):
                 and f["fixture"]["id"] not in done]
     finished.sort(key=lambda f: f["fixture"]["date"], reverse=True)  # mới nhất trước
 
-    prefix_base = f"bronze/api_football/fixture_detail/season={SEASON}"
+    prefix_base = f"raw/api_football/fixture_detail/season={SEASON}"
     for f in finished:
         fid = f["fixture"]["id"]
         if _used + 3 > DAILY_BUDGET:
@@ -121,7 +121,7 @@ def ingest_fixture_details(fixtures: dict, done: set):
 def build_events(done: set):
     rows = []
     for fid in done:
-        key = (f"bronze/api_football/fixture_detail/season={SEASON}"
+        key = (f"raw/api_football/fixture_detail/season={SEASON}"
                f"/fixture_id={fid}/events.json.gz")
         if not exists(key):
             continue
@@ -148,7 +148,7 @@ def build_stats(done: set):
     """statistics trả về list {type, value} -> pivot thành cột."""
     rows = []
     for fid in done:
-        key = (f"bronze/api_football/fixture_detail/season={SEASON}"
+        key = (f"raw/api_football/fixture_detail/season={SEASON}"
                f"/fixture_id={fid}/statistics.json.gz")
         if not exists(key):
             continue

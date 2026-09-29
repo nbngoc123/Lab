@@ -53,7 +53,7 @@ def ingest(partition: dict) -> str:
         return ""
         
     safe_q = re.sub(r"[\W]+", "_", q, flags=re.UNICODE).strip("_")
-    v_key = f"bronze/youtube/videos/query={safe_q}/ingest_date={D}/videos.jsonl.gz"
+    v_key = f"raw/youtube/videos/query={safe_q}/ingest_date={D}/videos.jsonl.gz"
     
     if exists(v_key):
         print(f"  · [YT] {q} đã có.")
@@ -109,7 +109,7 @@ def ingest(partition: dict) -> str:
             
             if cmts:
                 put_jsonl_gz(
-                    f"bronze/youtube/comments/video_id={vid_id}/ingest_date={D}/comments.jsonl.gz",
+                    f"raw/youtube/comments/video_id={vid_id}/ingest_date={D}/comments.jsonl.gz",
                     cmts, SRC, meta={"video_id": vid_id, "count": len(cmts)}
                 )
             time.sleep(0.5)

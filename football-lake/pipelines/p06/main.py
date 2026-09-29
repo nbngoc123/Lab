@@ -88,7 +88,7 @@ def run_sparql(query: str) -> dict:
 
 def ingest(partition: dict) -> str:
     name = partition["query_name"]
-    key = f"bronze/wikidata/sparql/query={name}/ingest_date={D}/result.json.gz"
+    key = f"raw/wikidata/sparql/query={name}/ingest_date={D}/result.json.gz"
     
     if exists(key):
         print(f"  · {name} đã lấy trong ngày {D}, bỏ qua tải lại.")
