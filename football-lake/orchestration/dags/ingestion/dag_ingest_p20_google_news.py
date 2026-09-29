@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.sdk import Asset
 
-asset_bronze = Asset("minio://football-lake/bronze/google_news")
+asset_raw = Asset("minio://football-lake/raw/google_news")
 
 with DAG(
     dag_id="dag_ingest_p20_google_news",
@@ -18,7 +18,7 @@ with DAG(
         from pipelines.p20.main import get_partitions_news
         return get_partitions_news()
 
-    @task(outlets=[asset_bronze])
+    @task(outlets=[asset_raw])
     def task_ingest(partition: dict):
         from pipelines.p20.main import ingest_news
         return ingest_news(partition)

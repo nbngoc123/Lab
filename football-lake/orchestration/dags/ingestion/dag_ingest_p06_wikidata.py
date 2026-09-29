@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.sdk import Asset
 
-asset_wikidata_bronze = Asset("minio://football-lake/bronze/wikidata")
+asset_wikidata_raw = Asset("minio://football-lake/raw/wikidata")
 
 with DAG(
     dag_id="dag_ingest_p06_wikidata",
@@ -18,7 +18,7 @@ with DAG(
         from pipelines.p06.main import get_partitions
         return get_partitions()
 
-    @task(outlets=[asset_wikidata_bronze])
+    @task(outlets=[asset_wikidata_raw])
     def task_ingest(partition: dict):
         from pipelines.p06.main import ingest
         return ingest(partition)
