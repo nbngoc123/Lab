@@ -1,15 +1,15 @@
-from airflow.assets import Asset
+from airflow.sdk import Asset
 
 # ==========================================
-# BRONZE ASSETS (MinIO Data Lake)
+# raw ASSETS (MinIO Data Lake)
 # ==========================================
-football_fixtures_bronze = Asset("minio://football-lake/bronze/api_football/fixtures")
-football_teams_bronze = Asset("minio://football-lake/bronze/api_football/teams")
-football_players_bronze = Asset("minio://football-lake/bronze/api_football/players")
+football_fixtures_raw = Asset("minio://football-lake/raw/api_football/fixtures")
+football_teams_raw = Asset("minio://football-lake/raw/api_football/teams")
+football_players_raw = Asset("minio://football-lake/raw/api_football/players")
 
-odds_bronze = Asset("minio://football-lake/bronze/odds")
-reddit_bronze = Asset("minio://football-lake/bronze/reddit")
-news_bronze = Asset("minio://football-lake/bronze/news")
+odds_raw = Asset("minio://football-lake/raw/odds")
+reddit_raw = Asset("minio://football-lake/raw/reddit")
+news_raw = Asset("minio://football-lake/raw/news")
 
 # ==========================================
 # RAW ASSETS (Snowflake)

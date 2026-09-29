@@ -1,7 +1,7 @@
 from datetime import datetime
 from airflow import DAG
 from airflow.decorators import task
-from airflow.assets import Asset
+from airflow.sdk import Asset
 
 asset_bronze = Asset("minio://football-lake/bronze/understat")
 
