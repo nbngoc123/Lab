@@ -128,7 +128,7 @@ def ingest_all() -> dict:
         res = run_sparql(q)
         n = len(res["results"]["bindings"])
         put_json_gz(
-            f"bronze/wikidata/sparql/query={name}/ingest_date={D}/result.json.gz",
+            f"raw/wikidata/sparql/query={name}/ingest_date={D}/result.json.gz",
             res, SRC, meta={"query": name, "rows": n})
         # lưu cả câu query để truy vết
         S3.put_object(Bucket=BUCKET, Key=f"_meta/wikidata/queries/{name}.rq",
@@ -197,5 +197,5 @@ if __name__ == "__main__":
     build_stadiums(res["pl_stadiums"])
     # manager nằm luôn trong clubs ở data model này (bạn có thể mở rộng nếu cần)
 
-    summary("bronze/wikidata/sparql/")
+    summary("raw/wikidata/sparql/")
     summary("silver/dim/wd_")

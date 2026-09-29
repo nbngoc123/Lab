@@ -87,7 +87,7 @@ def ingest_all_historical(stadiums: list, start="2020-08-01", end="2026-06-01"):
         venue_safe = venue.replace(" ", "_").replace("/", "_")
         body = fetch_historical(lat, lon, start, end)
         put_json_gz(
-            f"bronze/open_meteo/historical/venue={venue_safe}"
+            f"raw/open_meteo/historical/venue={venue_safe}"
             f"/ingest_date={D}/weather.json.gz",
             body, SRC, meta={"venue": venue, "lat": lat, "lon": lon})
         results[venue] = body
@@ -103,7 +103,7 @@ def ingest_forecast(stadiums: list):
         venue_safe = venue.replace(" ", "_").replace("/", "_")
         body = fetch_forecast(lat, lon)
         put_json_gz(
-            f"bronze/open_meteo/forecast/venue={venue_safe}"
+            f"raw/open_meteo/forecast/venue={venue_safe}"
             f"/ingest_date={D}/forecast.json.gz",
             body, SRC, meta={"venue": venue})
 
@@ -134,13 +134,13 @@ def build_hourly_table(results: dict) -> pd.DataFrame:
 
 
 def build_hourly_table_from_minio() -> pd.DataFrame:
-    """Đọc thẳng bronze/open_meteo/historical/ từ MinIO thay vì nhận dict lớn qua XCom.
+    """Đọc thẳng raw/open_meteo/historical/ từ MinIO thay vì nhận dict lớn qua XCom.
     Dùng khi DAG không truyền results qua XCom để tránh ReadTimeout."""
     import gzip, json, io as _io
     from lake.minio_io import S3, BUCKET, list_keys
 
     rows = []
-    prefix = "bronze/open_meteo/historical/"
+    prefix = "raw/open_meteo/historical/"
     for key, _ in list_keys(prefix):
         if not key.endswith(".json.gz"):
             continue
@@ -150,7 +150,7 @@ def build_hourly_table_from_minio() -> pd.DataFrame:
         except Exception as e:
             print(f"  ! Bỏ qua {key}: {e}")
             continue
-        # lấy venue từ path: bronze/open_meteo/historical/venue=<name>/...
+        # lấy venue từ path: raw/open_meteo/historical/venue=<name>/...
         parts = key.split("/")
         venue = next((p.replace("venue=", "") for p in parts if p.startswith("venue=")), "unknown")
         venue = venue.replace("_", " ")
@@ -252,5 +252,5 @@ if __name__ == "__main__":
     weather_df = build_hourly_table(results)
     join_weather_to_matches(weather_df, stadiums)
 
-    summary("bronze/open_meteo/")
+    summary("raw/open_meteo/")
     summary("silver/dim/om_venue_weather/")

@@ -48,7 +48,7 @@ def get_client():
 def ingest_players(client, league: str) -> list:
     data = client.league(league=league).get_player_data(season=SEASON)
     put_json_gz(
-        f"bronze/understat/players/league={league}/season={SEASON}"
+        f"raw/understat/players/league={league}/season={SEASON}"
         f"/ingest_date={D}/players.json.gz",
         data, SRC, meta={"count": len(data)})
     return data
@@ -57,7 +57,7 @@ def ingest_players(client, league: str) -> list:
 def ingest_teams(client, league: str) -> dict:
     data = client.league(league=league).get_team_data(season=SEASON)
     put_json_gz(
-        f"bronze/understat/teams/league={league}/season={SEASON}"
+        f"raw/understat/teams/league={league}/season={SEASON}"
         f"/ingest_date={D}/teams.json.gz",
         data, SRC, meta={"count": len(data)})
     return data
@@ -66,7 +66,7 @@ def ingest_teams(client, league: str) -> dict:
 def ingest_matches(client, league: str) -> list:
     data = client.league(league=league).get_match_data(season=SEASON)
     put_json_gz(
-        f"bronze/understat/matches/league={league}/season={SEASON}"
+        f"raw/understat/matches/league={league}/season={SEASON}"
         f"/ingest_date={D}/matches.json.gz",
         data, SRC, meta={"count": len(data)})
     return data
@@ -82,7 +82,7 @@ def ingest_shots_for_matches(client, match_ids: list, league: str,
             print(f"  ! match {mid}: {e}")
             continue
         put_json_gz(
-            f"bronze/understat/shots/league={league}/season={SEASON}"
+            f"raw/understat/shots/league={league}/season={SEASON}"
             f"/match_id={mid}/shots.json.gz",
             shots, SRC, meta={"match_id": mid})
         shots_all.append((mid, shots))
@@ -247,7 +247,7 @@ def run_pipeline():
                 continue
 
     print("\n[summary]")
-    summary("bronze/understat/")
+    summary("raw/understat/")
     summary("silver/players/understat_player_xg/")
     summary("silver/teams/understat_team_xg/")
 

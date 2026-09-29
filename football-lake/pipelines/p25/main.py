@@ -48,7 +48,7 @@ def ingest_news():
             data = data[:5]
             
         put_json_gz(
-            f"bronze/football_news/search_epl/ingest_date={D}/news.json.gz",
+            f"raw/football_news/search_epl/ingest_date={D}/news.json.gz",
             data, SRC, meta={"count": len(data)}
         )
         return data
@@ -85,7 +85,7 @@ def run_pipeline():
     print("\n[2/2] Silver build")
     build_silver(data)
     
-    summary("bronze/football_news/")
+    summary("raw/football_news/")
     summary("silver/news/football_news_agg/")
 
 if __name__ == "__main__":

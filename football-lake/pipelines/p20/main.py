@@ -105,7 +105,7 @@ def ingest_wikipedia():
                         
                         safe_title = re.sub(r"[^a-zA-Z0-9]+", "_", doc["title"]).strip("_")
                         put_json_gz(
-                            f"bronze/wikipedia_articles/entity={entity_type}/lang={lang}/article={safe_title}/fetched_date={D}/content.json.gz",
+                            f"raw/wikipedia_articles/entity={entity_type}/lang={lang}/article={safe_title}/fetched_date={D}/content.json.gz",
                             doc, SRC_WIKI, meta={"title": doc["title"], "lang": lang}
                         )
                 except Exception as e:
@@ -146,7 +146,7 @@ def ingest_google_news():
                 for r in entries:
                     gz.write((json.dumps(r, ensure_ascii=False) + "\n").encode("utf-8"))
             put_bytes(
-                f"bronze/rss/google_news/query={safe_q}/lang={q_cfg['lang']}/ingest_date={D}/entries.jsonl.gz",
+                f"raw/rss/google_news/query={safe_q}/lang={q_cfg['lang']}/ingest_date={D}/entries.jsonl.gz",
                 buf.getvalue(), SRC_NEWS, content_type="application/gzip", meta={"query": q_cfg["q"], "count": len(entries)}
             )
             print(f"  · {q_cfg['q']} ({q_cfg['lang']}): {len(entries)} bài")
@@ -188,14 +188,14 @@ def run_wikipedia_pipeline():
     print("[Wikipedia] Bắt đầu lấy dữ liệu...")
     wiki_data = ingest_wikipedia()
     build_wiki_silver(wiki_data)
-    summary("bronze/wikipedia_articles/")
+    summary("raw/wikipedia_articles/")
     summary("silver/text/wiki_articles/")
 
 def run_news_pipeline():
     print("[Google News] Bắt đầu lấy dữ liệu...")
     news_data = ingest_google_news()
     build_news_silver(news_data)
-    summary("bronze/rss/google_news/")
+    summary("raw/rss/google_news/")
     summary("silver/text/google_news_articles/")
 
 def run_pipeline():

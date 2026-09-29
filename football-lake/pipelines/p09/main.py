@@ -39,7 +39,7 @@ def call(path: str, params: dict | None = None) -> dict:
 # ---------- BRONZE ----------
 def ingest_competitions() -> dict:
     body = call("/competitions")
-    put_json_gz(f"bronze/football_data_org/competitions/ingest_date={D}/competitions.json.gz",
+    put_json_gz(f"raw/football_data_org/competitions/ingest_date={D}/competitions.json.gz",
                 body, SRC, meta={"count": body["count"]})
     return body
 
@@ -47,7 +47,7 @@ def ingest_competitions() -> dict:
 def ingest_teams(code: str) -> dict:
     body = call(f"/competitions/{code}/teams")
     put_json_gz(
-        f"bronze/football_data_org/teams/competition={code}/ingest_date={D}/teams.json.gz",
+        f"raw/football_data_org/teams/competition={code}/ingest_date={D}/teams.json.gz",
         body, SRC, meta={"competition": code, "teams": body["count"]})
     return body
 
@@ -56,7 +56,7 @@ def ingest_matches(code: str) -> dict:
     body = call(f"/competitions/{code}/matches")
     season_start = body["filters"].get("season", "unknown")
     put_json_gz(
-        f"bronze/football_data_org/matches/competition={code}"
+        f"raw/football_data_org/matches/competition={code}"
         f"/season={season_start}/ingest_date={D}/matches.json.gz",
         body, SRC, meta={"competition": code, "matches": len(body["matches"])})
     return body
@@ -65,7 +65,7 @@ def ingest_matches(code: str) -> dict:
 def ingest_standings(code: str) -> dict:
     body = call(f"/competitions/{code}/standings")
     put_json_gz(
-        f"bronze/football_data_org/standings/competition={code}"
+        f"raw/football_data_org/standings/competition={code}"
         f"/ingest_date={D}/standings.json.gz",
         body, SRC, meta={"competition": code})
     return body
@@ -206,7 +206,7 @@ def run_pipeline():
             print(f"Error fetching standings for {code}: {e}")
 
     print("\n[5/5] tổng kết")
-    summary("bronze/football_data_org/")
+    summary("raw/football_data_org/")
     summary("silver/dim/fdo_teams/")
     summary("silver/matches/fdo_matches/")
 

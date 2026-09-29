@@ -40,7 +40,7 @@ def download_all() -> dict:
     keys, failed = {}, []
     for div in DIVISIONS:
         for season in SEASONS:
-            key = f"bronze/football_data_couk/{div}/season={season}/{div}.csv"
+            key = f"raw/football_data_couk/{div}/season={season}/{div}.csv"
             if exists(key):
                 print(f"  · {div}/{season} đã có, bỏ qua")
                 keys[(div, season)] = key
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     print("[4/4] silver: odds")
     build_odds(keys)
 
-    summary("bronze/football_data_couk/")
+    summary("raw/football_data_couk/")
     summary("silver/matches/fd_matches/")
     summary("silver/odds/fd_odds/")
     summary("silver/odds/fd_odds_ah/")

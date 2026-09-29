@@ -121,7 +121,7 @@ def ingest_youtube():
                 
                 if cmts:
                     put_jsonl_gz(
-                        f"bronze/youtube/comments/video_id={vid_id}/ingest_date={D}/comments.jsonl.gz",
+                        f"raw/youtube/comments/video_id={vid_id}/ingest_date={D}/comments.jsonl.gz",
                         cmts, SRC, meta={"video_id": vid_id, "count": len(cmts)}
                     )
                     all_comments.extend(cmts)
@@ -129,7 +129,7 @@ def ingest_youtube():
                 
             if videos:
                 put_jsonl_gz(
-                    f"bronze/youtube/videos/query={safe_q}/ingest_date={D}/videos.jsonl.gz",
+                    f"raw/youtube/videos/query={safe_q}/ingest_date={D}/videos.jsonl.gz",
                     videos, SRC, meta={"query": q, "count": len(videos)}
                 )
                 all_videos.extend(videos)
@@ -173,7 +173,7 @@ def run_pipeline():
     print("\n[2/2] Silver build")
     build_yt_silver(videos, comments)
     
-    summary("bronze/youtube/")
+    summary("raw/youtube/")
     summary("silver/text/youtube_videos/")
     summary("silver/text/youtube_comments/")
 

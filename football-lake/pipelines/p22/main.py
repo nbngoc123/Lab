@@ -41,7 +41,7 @@ def ingest_odds():
             data = data[:2]
             
         put_json_gz(
-            f"bronze/odds/epl/ingest_date={D}/odds.json.gz",
+            f"raw/odds/epl/ingest_date={D}/odds.json.gz",
             data, SRC, meta={"count": len(data)}
         )
         return data
@@ -140,7 +140,7 @@ def run_pipeline():
     print("\n[2/2] Silver build")
     build_silver(data)
     
-    summary("bronze/odds/")
+    summary("raw/odds/")
     summary("silver/betting/odds_h2h/")
 
 if __name__ == "__main__":

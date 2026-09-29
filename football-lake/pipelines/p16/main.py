@@ -15,7 +15,7 @@ def fetch_page() -> str:
     r.raise_for_status()
     html = r.text
     put_bytes(
-        f"bronze/physioroom/injury_table/ingest_date={D}/page.html",
+        f"raw/physioroom/injury_table/ingest_date={D}/page.html",
         html.encode("utf-8"), SRC, content_type="text/html")
     return html
 
@@ -35,7 +35,7 @@ def parse_tables(html: str) -> list:
 
     raw_data = [t.to_dict(orient="records") for t in tables[:4]]
     put_json_gz(
-        f"bronze/physioroom/injury_table/ingest_date={D}/tables_raw.json.gz",
+        f"raw/physioroom/injury_table/ingest_date={D}/tables_raw.json.gz",
         raw_data, SRC, meta={"n_tables": len(tables)})
     return raw_data
 
@@ -112,7 +112,7 @@ def run_pipeline():
     build_player_injuries(tables[1])
     build_injury_frequency(tables[3])
 
-    summary("bronze/physioroom/")
+    summary("raw/physioroom/")
     summary("silver/dim/pr_")
     summary("silver/players/pr_")
 

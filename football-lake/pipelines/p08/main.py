@@ -94,7 +94,7 @@ def fetch_image(url: str, s3_key: str, entity: str,
 
 # ── BRONZE ────────────────────────────────────────────────────────────────────
 def ingest_teams_for_league(league_name: str, league_slug: str) -> list:
-    key = (f"bronze/thesportsdb/metadata/entity=teams"
+    key = (f"raw/thesportsdb/metadata/entity=teams"
            f"/league={league_slug}/ingest_date={D}/teams.json.gz")
     if exists(key):
         from lake.minio_io import read_json_gz
@@ -114,7 +114,7 @@ def ingest_teams_for_league(league_name: str, league_slug: str) -> list:
 
 
 def ingest_players_for_team(team_id: str) -> list:
-    key = f"bronze/thesportsdb/metadata/entity=players/team_id={team_id}/ingest_date={D}/players.json.gz"
+    key = f"raw/thesportsdb/metadata/entity=players/team_id={team_id}/ingest_date={D}/players.json.gz"
     if exists(key):
         from lake.minio_io import read_json_gz
         return read_json_gz(key).get("player") or []
@@ -135,7 +135,7 @@ def ingest_players_for_team(team_id: str) -> list:
 def ingest_player_extras(player_id: str):
     """Cào Honors và Former Teams của 1 cầu thủ"""
     # 1. Honors
-    hk = f"bronze/thesportsdb/metadata/entity=honors/player_id={player_id}/ingest_date={D}/honors.json.gz"
+    hk = f"raw/thesportsdb/metadata/entity=honors/player_id={player_id}/ingest_date={D}/honors.json.gz"
     if not exists(hk):
         try:
             r = SESSION.get(f"{BASE}/lookuphonors.php", params={"id": player_id})
@@ -146,7 +146,7 @@ def ingest_player_extras(player_id: str):
         except Exception: pass
 
     # 2. Former Teams
-    fk = f"bronze/thesportsdb/metadata/entity=former_teams/player_id={player_id}/ingest_date={D}/former_teams.json.gz"
+    fk = f"raw/thesportsdb/metadata/entity=former_teams/player_id={player_id}/ingest_date={D}/former_teams.json.gz"
     if not exists(fk):
         try:
             r = SESSION.get(f"{BASE}/lookupformerteams.php", params={"id": player_id})
@@ -160,7 +160,7 @@ def ingest_player_extras(player_id: str):
 def ingest_team_equipment(team_id: str) -> list:
     """Cào danh sách áo đấu và tải ảnh nhị phân"""
     manifest = []
-    ek = f"bronze/thesportsdb/metadata/entity=equipment/team_id={team_id}/ingest_date={D}/equipment.json.gz"
+    ek = f"raw/thesportsdb/metadata/entity=equipment/team_id={team_id}/ingest_date={D}/equipment.json.gz"
     
     if exists(ek):
         from lake.minio_io import read_json_gz
@@ -182,7 +182,7 @@ def ingest_team_equipment(team_id: str) -> list:
         season = eq.get("strSeason", "unknown")
         type_  = eq.get("strType", "home").lower().replace(" ", "_")
         ext    = os.path.splitext(urlparse(url).path)[1].lower() or ".jpg"
-        key = f"bronze/thesportsdb/media/entity=equipment/team_id={team_id}/season={season}_{type_}{ext}"
+        key = f"raw/thesportsdb/media/entity=equipment/team_id={team_id}/season={season}_{type_}{ext}"
         mf = fetch_image(url, key, "equipment", team_id, f"{season}_{type_}")
         if mf: manifest.append(mf)
     return manifest
@@ -196,7 +196,7 @@ def ingest_team_media(teams: list) -> list:
             url = t.get(field)
             if not url: continue
             ext = os.path.splitext(urlparse(url).path)[1].lower() or ".jpg"
-            key = f"bronze/thesportsdb/media/entity=team/team_id={tid}/{role}{ext}"
+            key = f"raw/thesportsdb/media/entity=team/team_id={tid}/{role}{ext}"
             mf = fetch_image(url, key, "team", tid, role)
             if mf: manifest.append(mf)
             
@@ -224,7 +224,7 @@ def ingest_players_and_media(teams: list) -> list:
                 url = p.get(field)
                 if not url: continue
                 ext = os.path.splitext(urlparse(url).path)[1].lower() or ".jpg"
-                key = f"bronze/thesportsdb/media/entity=player/player_id={pid}/{role}{ext}"
+                key = f"raw/thesportsdb/media/entity=player/player_id={pid}/{role}{ext}"
                 mf = fetch_image(url, key, "player", pid, role)
                 if mf:
                     manifest.append(mf)
@@ -260,7 +260,7 @@ def build_teams_dim(all_teams: list):
 def build_players_dim():
     """Đọc từ Bronze build metadata cầu thủ chi tiết (Lương, Hợp đồng, ID chéo...)"""
     from lake.minio_io import list_keys, read_json_gz
-    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=players/")]
+    keys = [k for k, _ in list_keys(f"raw/thesportsdb/metadata/entity=players/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
@@ -298,7 +298,7 @@ def build_player_honors_former_teams():
     from lake.minio_io import list_keys, read_json_gz
     
     # Honors
-    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=honors/")]
+    keys = [k for k, _ in list_keys(f"raw/thesportsdb/metadata/entity=honors/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
@@ -316,7 +316,7 @@ def build_player_honors_former_teams():
         print(f"  ✓ dim honors: {len(df_h)} danh hiệu")
 
     # Former Teams
-    keys = [k for k, _ in list_keys(f"bronze/thesportsdb/metadata/entity=former_teams/")]
+    keys = [k for k, _ in list_keys(f"raw/thesportsdb/metadata/entity=former_teams/")]
     rows = []
     for k in keys:
         if k.endswith(".json.gz"):
@@ -373,7 +373,7 @@ def run_pipeline():
     write_manifest(all_manifest)
 
     print("\n[Summary]")
-    summary("bronze/thesportsdb/")
+    summary("raw/thesportsdb/")
     summary("silver/dim/tsdb_")
 
 

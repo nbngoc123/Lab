@@ -212,7 +212,7 @@ def ingest_entities_multilang(entities: dict, entity_type: str,
             n = len(body.get("items", []))
             if n > 0:
                 put_json_gz(
-                    f"bronze/wikimedia_pageviews/per_article/entity={entity_type}"
+                    f"raw/wikimedia_pageviews/per_article/entity={entity_type}"
                     f"/lang={lang}/article={article}/ingest_date={D}/daily.json.gz",
                     body, SRC, meta={"article": article, "lang": lang, "days": n})
                 results.append((article, label, lang, body))
@@ -230,7 +230,7 @@ def ingest_top_daily_multilang(n_days: int = 7):
             try:
                 body = fetch_top(target, lang)
                 put_json_gz(
-                    f"bronze/wikimedia_pageviews/top_daily/lang={lang}"
+                    f"raw/wikimedia_pageviews/top_daily/lang={lang}"
                     f"/date={target.isoformat()}/top.json.gz",
                     body, SRC, meta={"date": target.isoformat(), "lang": lang})
             except Exception as e:
@@ -350,7 +350,7 @@ def run_pipeline():
     build_silver_spikes(team_df, player_df)
 
     print("\n[summary]")
-    summary("bronze/wikimedia_pageviews/")
+    summary("raw/wikimedia_pageviews/")
     summary("silver/text/wm_pageviews/")
     summary("silver/text/wm_pageviews_multilang/")
 

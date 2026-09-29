@@ -85,7 +85,7 @@ def save_checkpoint(done: set):
 # ─────────────────── BRONZE ──────────────────────────────────────────────
 def ingest_teams():
     """Teams + Venues (cache vĩnh viễn, chỉ gọi 1 lần)."""
-    key = f"bronze/api_football/teams/season={SEASON}/teams.json.gz"
+    key = f"raw/api_football/teams/season={SEASON}/teams.json.gz"
     if exists(key):
         print("  · teams đã cache, bỏ qua (tiết kiệm quota)")
         return read_json_gz(key)
@@ -99,7 +99,7 @@ def ingest_standings():
     """Bảng xếp hạng — cập nhật mỗi ngày."""
     body = call("/standings", {"league": LEAGUE, "season": SEASON})
     put_json_gz(
-        f"bronze/api_football/standings/ingest_date={D}/standings.json.gz",
+        f"raw/api_football/standings/ingest_date={D}/standings.json.gz",
         body, SRC
     )
     print("  ✓ standings -> bronze")
@@ -112,12 +112,12 @@ def ingest_fixtures():
     for s in SEASONS:
         if _used >= DAILY_BUDGET:
             break
-        key = f"bronze/api_football/fixtures/season={s}/ingest_date={D}/fixtures.json.gz"
+        key = f"raw/api_football/fixtures/season={s}/ingest_date={D}/fixtures.json.gz"
         # Tránh tải lại nếu đã tải hôm nay, HOẶC nếu đã có file fixtures cho mùa cũ (mùa cũ không thay đổi)
-        if s < 2024 and len(_list_bronze_keys(f"bronze/api_football/fixtures/season={s}/")) > 0:
+        if s < 2024 and len(_list_bronze_keys(f"raw/api_football/fixtures/season={s}/")) > 0:
             print(f"  · fixtures mùa {s} đã cache, bỏ qua")
             # Tải từ MinIO để return
-            bodies.append(read_json_gz(_list_bronze_keys(f"bronze/api_football/fixtures/season={s}/")[-1]))
+            bodies.append(read_json_gz(_list_bronze_keys(f"raw/api_football/fixtures/season={s}/")[-1]))
             continue
             
         body = call("/fixtures", {"league": LEAGUE, "season": s})
@@ -129,7 +129,7 @@ def ingest_fixtures():
 
 def ingest_top_scorers():
     """Top ghi bàn mùa giải."""
-    key = f"bronze/api_football/top_scorers/season={SEASON}/ingest_date={D}/scorers.json.gz"
+    key = f"raw/api_football/top_scorers/season={SEASON}/ingest_date={D}/scorers.json.gz"
     body = call("/players/topscorers", {"league": LEAGUE, "season": SEASON})
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} top scorers -> bronze")
@@ -138,7 +138,7 @@ def ingest_top_scorers():
 
 # ─── TOP STATS (không tốn nhiều quota) ───────────────────────────────────────
 def ingest_top_assists():
-    key = f"bronze/api_football/top_assists/season={SEASON}/ingest_date={D}/assists.json.gz"
+    key = f"raw/api_football/top_assists/season={SEASON}/ingest_date={D}/assists.json.gz"
     body = call("/players/topassists", {"league": LEAGUE, "season": SEASON})
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} top assists -> bronze")
@@ -146,7 +146,7 @@ def ingest_top_assists():
 
 
 def ingest_top_yellow_cards():
-    key = f"bronze/api_football/top_yellow/season={SEASON}/ingest_date={D}/yellow.json.gz"
+    key = f"raw/api_football/top_yellow/season={SEASON}/ingest_date={D}/yellow.json.gz"
     body = call("/players/topyellowcards", {"league": LEAGUE, "season": SEASON})
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} top yellow cards -> bronze")
@@ -154,7 +154,7 @@ def ingest_top_yellow_cards():
 
 
 def ingest_top_red_cards():
-    key = f"bronze/api_football/top_red/season={SEASON}/ingest_date={D}/red.json.gz"
+    key = f"raw/api_football/top_red/season={SEASON}/ingest_date={D}/red.json.gz"
     body = call("/players/topredcards", {"league": LEAGUE, "season": SEASON})
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} top red cards -> bronze")
@@ -163,7 +163,7 @@ def ingest_top_red_cards():
 
 def ingest_injuries():
     """Danh sách chấn thương hiện tại."""
-    key = f"bronze/api_football/injuries/season={SEASON}/ingest_date={D}/injuries.json.gz"
+    key = f"raw/api_football/injuries/season={SEASON}/ingest_date={D}/injuries.json.gz"
     body = call("/injuries", {"league": LEAGUE, "season": SEASON})
     put_json_gz(key, body, SRC, meta={"count": body["results"]})
     print(f"  ✓ {body['results']} injuries -> bronze")
@@ -187,7 +187,7 @@ def ingest_players_squad():
 
     # Lọc những player đã có
     existing_players = set()
-    for pk in _list_bronze_keys("bronze/api_football/players/"):
+    for pk in _list_bronze_keys("raw/api_football/players/"):
         try:
             body = read_json_gz(pk)
             for item in body.get("response", []):
@@ -207,7 +207,7 @@ def ingest_players_squad():
         
         # Chỉ gọi 1 request cho player_id (season gần nhất để lấy profile)
         # Ghi vào thư mục riêng theo player_id để dễ quản lý
-        key = f"bronze/api_football/players_by_id/player_id={pid}/player.json.gz"
+        key = f"raw/api_football/players_by_id/player_id={pid}/player.json.gz"
         if exists(key):
             continue
         try:
@@ -269,7 +269,7 @@ def ingest_media_binary(teams_body: dict) -> list:
             ext = os.path.splitext(urlparse(logo_url).path)[1].lower() or ".png"
             mf = _fetch_binary(
                 logo_url,
-                f"bronze/api_football/media/entity=team/team_id={tid}/logo{ext}",
+                f"raw/api_football/media/entity=team/team_id={tid}/logo{ext}",
                 "team", tid, "logo"
             )
             if mf:
@@ -282,7 +282,7 @@ def ingest_media_binary(teams_body: dict) -> list:
             ext = os.path.splitext(urlparse(venue_url).path)[1].lower() or ".jpg"
             mf = _fetch_binary(
                 venue_url,
-                f"bronze/api_football/media/entity=venue/venue_id={vid}/photo{ext}",
+                f"raw/api_football/media/entity=venue/venue_id={vid}/photo{ext}",
                 "venue", vid, "photo"
             )
             if mf:
@@ -291,7 +291,7 @@ def ingest_media_binary(teams_body: dict) -> list:
 
     # B: Ảnh cầu thủ từ players đã cache
     import glob
-    pages = [k for k in _list_bronze_keys(f"bronze/api_football/players/season={SEASON}/")]
+    pages = [k for k in _list_bronze_keys(f"raw/api_football/players/season={SEASON}/")]
     for pk in pages:
         try:
             pbody = read_json_gz(pk)
@@ -305,7 +305,7 @@ def ingest_media_binary(teams_body: dict) -> list:
                 ext = os.path.splitext(urlparse(photo_url).path)[1].lower() or ".png"
                 mf = _fetch_binary(
                     photo_url,
-                    f"bronze/api_football/media/entity=player/player_id={pid}/photo{ext}",
+                    f"raw/api_football/media/entity=player/player_id={pid}/photo{ext}",
                     "player", pid, "photo"
                 )
                 if mf:
@@ -361,7 +361,7 @@ def ingest_fixture_details(fixtures_bodies: list, done: set) -> set:
             ]:
                 body = call(api_path, {"fixture": fid})
                 put_json_gz(
-                    f"bronze/api_football/fixture_detail/season={season}/fixture_id={fid}/{endpoint_name}.json.gz",
+                    f"raw/api_football/fixture_detail/season={season}/fixture_id={fid}/{endpoint_name}.json.gz",
                     body, SRC, meta={"fixture_id": fid}
                 )
             done.add(fid)
@@ -454,7 +454,7 @@ def build_silver_events(done: set):
         pass
     
     # Để build toàn bộ silver, ta quyét toàn bộ bronze fixture_detail
-    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+    for key in _list_bronze_keys("raw/api_football/fixture_detail/"):
         if not key.endswith("events.json.gz"):
             continue
         fid = int(key.split("fixture_id=")[1].split("/")[0])
@@ -484,7 +484,7 @@ def build_silver_events(done: set):
 def build_silver_lineups(done: set):
     """Đội hình ra sân (11 người + dự bị) -> silver."""
     rows = []
-    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+    for key in _list_bronze_keys("raw/api_football/fixture_detail/"):
         if not key.endswith("lineups.json.gz"):
             continue
         fid = int(key.split("fixture_id=")[1].split("/")[0])
@@ -520,7 +520,7 @@ def build_silver_lineups(done: set):
 def build_silver_stats(done: set):
     """Thống kê đội bóng (shots, passes, ball possession...) -> silver."""
     rows = []
-    for key in _list_bronze_keys("bronze/api_football/fixture_detail/"):
+    for key in _list_bronze_keys("raw/api_football/fixture_detail/"):
         if not key.endswith("statistics.json.gz"):
             continue
         fid = int(key.split("fixture_id=")[1].split("/")[0])
@@ -576,7 +576,7 @@ def build_silver_top_scorers(body: dict):
 def build_silver_players():
     """Gộp tất cả pages players -> silver parquet."""
     rows = []
-    for pk in _list_bronze_keys("bronze/api_football/players"):
+    for pk in _list_bronze_keys("raw/api_football/players"):
         try:
             body = read_json_gz(pk)
         except Exception:
@@ -729,7 +729,7 @@ def run_pipeline():
 
     # ── SUMMARY ──
     print("\n=== SUMMARY ===")
-    summary("bronze/api_football/")
+    summary("raw/api_football/")
     summary("silver/matches/af_")
     summary("silver/standings/af_")
     summary("silver/players/af_")
