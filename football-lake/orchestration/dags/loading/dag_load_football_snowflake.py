@@ -12,7 +12,7 @@ from airflow.sdk import Asset
 # ==============================================================================
 
 SOURCES = [
-    ("p03_football_data_co_uk", "raw/football_data_co_uk", "FOOTBALL_DATA_CO_UK", "football_data_co_uk"),
+    ("p03_football_data_co_uk", "raw/football_data_couk", "FOOTBALL_DATA_CO_UK", "football_data_co_uk"),
     ("p06_wikidata", "raw/wikidata", "WIKIDATA", "wikidata"),
     ("p08_thesportsdb", "raw/thesportsdb", "THESPORTSDB", "thesportsdb"),
     ("p09_football_data_org", "raw/football_data_org", "FOOTBALL_DATA_ORG", "football_data_org"),
@@ -95,6 +95,10 @@ for dag_suffix, minio_prefix, sf_table, asset_name in SOURCES:
             task_id="copy_into_table", 
             conn_id="snowflake_default", 
             sql=f"""
+            CREATE TABLE IF NOT EXISTS FOOTBALL_DWH.RAW.{sf_table} (
+                RAW_DATA VARIANT,
+                INGEST_TIMESTAMP TIMESTAMP_NTZ
+            );
             COPY INTO FOOTBALL_DWH.RAW.{sf_table} (RAW_DATA, INGEST_TIMESTAMP)
             FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/{minio_prefix}/)
             FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'
@@ -133,17 +137,17 @@ with dag_p24:
 
     load_f = SQLExecuteQueryOperator(
         task_id="copy_fixtures", conn_id="snowflake_default",
-        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_FIXTURES (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/fixtures/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        sql="CREATE TABLE IF NOT EXISTS FOOTBALL_DWH.RAW.API_FOOTBALL_FIXTURES (RAW_DATA VARIANT, INGEST_TIMESTAMP TIMESTAMP_NTZ); COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_FIXTURES (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/fixtures/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
         outlets=[football_fixtures_raw]
     )
     load_t = SQLExecuteQueryOperator(
         task_id="copy_teams", conn_id="snowflake_default",
-        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_TEAMS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/teams/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        sql="CREATE TABLE IF NOT EXISTS FOOTBALL_DWH.RAW.API_FOOTBALL_TEAMS (RAW_DATA VARIANT, INGEST_TIMESTAMP TIMESTAMP_NTZ); COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_TEAMS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/teams/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
         outlets=[football_teams_raw]
     )
     load_p = SQLExecuteQueryOperator(
         task_id="copy_players", conn_id="snowflake_default",
-        sql="COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_PLAYERS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/players_summary/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
+        sql="CREATE TABLE IF NOT EXISTS FOOTBALL_DWH.RAW.API_FOOTBALL_PLAYERS (RAW_DATA VARIANT, INGEST_TIMESTAMP TIMESTAMP_NTZ); COPY INTO FOOTBALL_DWH.RAW.API_FOOTBALL_PLAYERS (RAW_DATA, INGEST_TIMESTAMP) FROM (SELECT $1, CURRENT_TIMESTAMP() FROM @FOOTBALL_DWH.RAW.MINIO_RAW_STAGE/raw/api_football/players_summary/) FILE_FORMAT = (TYPE = 'JSON' COMPRESSION = 'AUTO') ON_ERROR = 'CONTINUE'",
         outlets=[football_players_raw]
     )
     
