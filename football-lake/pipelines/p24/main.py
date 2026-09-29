@@ -30,13 +30,24 @@ def call_api(path: str, params: dict) -> dict:
     
     # Xử lý lỗi API (Hết Quota ngày hoặc Rate limit)
     if r.status_code in (429, 403):
-        raise RuntimeError(f"Lỗi API (Status {r.status_code}): {r.text}")
+        try:
+            from airflow.exceptions import AirflowSkipException
+            raise AirflowSkipException(f"Hết Quota API-Football (Status {r.status_code}). Bỏ qua task hôm nay.")
+        except ImportError:
+            raise RuntimeError(f"Lỗi API (Status {r.status_code}): {r.text}")
         
     r.raise_for_status()
     body = r.json()
 
     if body.get("errors") and body["errors"] != []:
-        raise RuntimeError(f"API trả về lỗi trong body: {body['errors']}")
+        errors = body["errors"]
+        if isinstance(errors, dict) and "requests" in errors:
+            try:
+                from airflow.exceptions import AirflowSkipException
+                raise AirflowSkipException(f"Hết Quota API: {errors['requests']}")
+            except ImportError:
+                pass
+        raise RuntimeError(f"API trả về lỗi trong body: {errors}")
         
     return body
 
