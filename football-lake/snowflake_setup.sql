@@ -29,10 +29,9 @@ CREATE OR REPLACE TABLE FOOTBALL_NEWS (RAW_DATA VARIANT, INGEST_TIMESTAMP TIMEST
 -- 2. Endpoint KHÔNG ĐƯỢC chứa số cổng (port 9000 không được hỗ trợ). 
 --    Snowflake bắt buộc Endpoint phải là HTTPS (port 443) có chứng chỉ TLS hợp lệ.
 -- 3. Bạn không cần tạo Storage Integration cho s3compat.
-CREATE OR REPLACE STAGE MINIO_BRONZE_STAGE
-  URL = 's3compat://football-lake/bronze/'
-  ENDPOINT = '20.41.113.183.nip.io' -- Tên miền này trỏ thẳng về IP của bạn, đã được bọc HTTPS
-  CREDENTIALS = (AWS_KEY_ID = 'minioadmin' AWS_SECRET_KEY = 'minioadmin123');
+-- 3. TẠO STAGE NỘI BỘ (INTERNAL STAGE) LÀM TRẠM TRUNG CHUYỂN
+CREATE OR REPLACE STAGE MINIO_RAW_STAGE
+  DIRECTORY = (ENABLE = TRUE);
 
 -- Nếu bạn không thể cài Nginx HTTPS cho MinIO, giải pháp duy nhất là:
 -- Sửa DAG của Airflow: dùng LocalFilesystemToSnowflakeOperator (tải từ MinIO xuống Airflow Worker, rồi upload lên Snowflake Internal Stage).
