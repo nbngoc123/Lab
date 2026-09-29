@@ -1314,7 +1314,9 @@ def main():
     for t in ("feature_team_match", "feature_league_position", "feature_elo", "feature_market",
               "feature_team_xg", "feature_team_attention", "feature_match_context",
               "feature_market_ah", "feature_team_news_buzz", "feature_team_injuries",
-              "feature_team_stats_af", "bridge_fd_af_match", "feature_match_ml"):
+              "feature_team_stats_af", "bridge_fd_af_match", 
+              "feature_team_h2h", "feature_team_youtube", "feature_team_tactical",
+              "feature_media_spikes", "feature_referee", "feature_distance", "feature_match_ml"):
         store.write_parquet(f"{OUT}/{t}.parquet", con.execute(f"SELECT * FROM {t}").df())
     store.write_csv(f"{OUT}/_feature_catalog.csv", catalog(con))
     if not dim_wiki.empty:
