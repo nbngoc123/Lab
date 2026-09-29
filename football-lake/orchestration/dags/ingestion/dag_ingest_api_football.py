@@ -23,7 +23,6 @@ with DAG(
     schedule='@daily',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    max_active_tasks=1,  # BẮT BUỘC: Chạy tuần tự để không bị Rate Limit (10 req/phút)
     tags=['ingestion', 'api_football', 'bronze'],
 ) as dag:
 
