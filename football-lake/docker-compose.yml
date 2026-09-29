@@ -1,53 +1,54 @@
 version: '3.8'
-
 x-airflow-common:
-  &airflow-common
-  build:
+  build: &id001
     context: .
     dockerfile: Dockerfile
   env_file: .env
-  environment:
-    &airflow-common-env
+  environment: &id002
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
-    AIRFLOW__API_AUTH__JWT_SECRET: 'a_very_long_secure_secret_key_for_api_and_jwt_1234567890_that_is_64_bytes_long_minimum_1234567890'
-    AIRFLOW__API_AUTH__JWT_ISSUER: 'airflow'
-    MINIO_ENDPOINT: 'http://minio:9000'
-    MINIO_ACCESS_KEY: 'minioadmin'
-    MINIO_SECRET_KEY: 'minioadmin123'
-    MINIO_BUCKET: 'football-lake'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: a_very_long_secure_secret_key_for_api_and_jwt_1234567890_that_is_64_bytes_long_minimum_1234567890
+    AIRFLOW__API_AUTH__JWT_ISSUER: airflow
+    MINIO_ENDPOINT: http://minio:9000
+    MINIO_ACCESS_KEY: minioadmin
+    MINIO_SECRET_KEY: minioadmin123
+    MINIO_BUCKET: football-lake
     PYTHONPATH: /opt/project
-  volumes:
-    - ./orchestration/dags:/opt/airflow/dags
-    - .:/opt/project
-  depends_on:
+  volumes: &id003
+  - ./orchestration/dags:/opt/airflow/dags
+  - .:/opt/project
+  - ./secrets:/opt/airflow/secrets:ro
+  - ./secrets:/opt/airflow/secrets:ro
+  depends_on: &id004
     postgres:
       condition: service_healthy
-
 services:
   minio:
     image: quay.io/minio/minio:latest
     container_name: minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web Console
+    - 9000:9000
+    - 9001:9001
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
     volumes:
-      - ./minio-data:/data
+    - ./minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test:
+      - CMD
+      - mc
+      - ready
+      - local
       interval: 10s
       timeout: 5s
       retries: 5
-
   postgres:
     image: postgres:15
     container_name: postgres
@@ -56,44 +57,55 @@ services:
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+    - ./postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U airflow
       interval: 10s
       timeout: 5s
       retries: 5
-
   airflow-init:
-    <<: *airflow-common
+    build: *id001
+    env_file: .env
+    environment: *id002
+    volumes: *id003
+    depends_on: *id004
     container_name: airflow-init
-    user: "0:0"
-    command: >
-      bash -c "
-      mkdir -p /opt/airflow/dags && chown -R 50000:0 /opt/airflow/dags
-      && su -s /bin/bash airflow -c 'airflow db migrate && airflow users create -r Admin -u admin -p admin -e admin@example.com -f admin -l user || true'
-      "
+    user: 0:0
+    command: 'bash -c " mkdir -p /opt/airflow/dags && chown -R 50000:0 /opt/airflow/dags
+      && su -s /bin/bash airflow -c ''airflow db migrate && airflow users create -r
+      Admin -u admin -p admin -e admin@example.com -f admin -l user || true'' "
 
+      '
   airflow-webserver:
-    <<: *airflow-common
-    container_name: airflow-webserver
-    command: api-server
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    build: *id001
+    env_file: .env
+    environment: *id002
+    volumes: *id003
     depends_on:
       postgres:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
-
+    container_name: airflow-webserver
+    command: api-server
+    ports:
+    - 8080:8080
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - --fail
+      - http://localhost:8080/api/v2/version
+      interval: 30s
+      timeout: 10s
+      retries: 3
   airflow-scheduler:
-    <<: *airflow-common
-    container_name: airflow-scheduler
-    command: scheduler
+    build: *id001
+    env_file: .env
+    environment: *id002
+    volumes: *id003
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,13 +113,17 @@ services:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
-
+    container_name: airflow-scheduler
+    command: scheduler
   airflow-dag-processor:
-    <<: *airflow-common
-    container_name: airflow-dag-processor
-    command: dag-processor
+    build: *id001
+    env_file: .env
+    environment: *id002
+    volumes: *id003
     depends_on:
       postgres:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
+    container_name: airflow-dag-processor
+    command: dag-processor
