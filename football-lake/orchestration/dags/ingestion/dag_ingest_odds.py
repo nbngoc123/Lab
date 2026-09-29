@@ -17,12 +17,18 @@ with DAG(
     schedule='@hourly',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['betting', 'odds', 'hourly', 'p22'],
+    tags=['betting', 'odds', 'hourly', 'p22', 'bronze'],
 ) as dag:
 
-    @task(outlets=[odds_bronze])
-    def task_ingest_odds():
-        from pipelines.p22.main import run_pipeline
-        run_pipeline()
+    @task
+    def task_get_partitions():
+        from pipelines.p22.main import get_partitions
+        return get_partitions()
 
-    task_ingest_odds()
+    @task(outlets=[odds_bronze])
+    def task_ingest(partition: dict):
+        from pipelines.p22.main import ingest
+        return ingest(partition)
+
+    partitions = task_get_partitions()
+    ingest_tasks = task_ingest.expand(partition=partitions)

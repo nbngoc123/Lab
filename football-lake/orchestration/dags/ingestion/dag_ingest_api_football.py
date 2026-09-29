@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.decorators import task
 
-# Import các Asset đã định nghĩa
 from common.assets import (
     football_fixtures_bronze, 
     football_teams_bronze, 
@@ -34,30 +33,21 @@ with DAG(
 
     @task(outlets=[football_teams_bronze])
     def fetch_teams(league_id: int):
-        """Lấy thông tin đội bóng của một giải. Phát ra Asset: teams_bronze."""
-        print(f"Fetching teams for league {league_id}...")
-        # Gọi code Python ingestion thực tế ở đây:
-        # from pipelines.p24.main import ingest_teams
-        # return ingest_teams(league_id=league_id)
-        return f"Teams fetched for {league_id}"
+        from pipelines.p24.main import ingest_teams
+        return ingest_teams(league_id)
 
     @task(outlets=[football_fixtures_bronze])
     def fetch_fixtures(league_id: int):
-        """Lấy lịch thi đấu/kết quả. Phát ra Asset: fixtures_bronze."""
-        print(f"Fetching fixtures for league {league_id}...")
-        return f"Fixtures fetched for {league_id}"
+        from pipelines.p24.main import ingest_fixtures
+        return ingest_fixtures(league_id)
 
     @task(outlets=[football_players_bronze])
     def fetch_players(league_id: int):
-        """Lấy thông tin cầu thủ. Phát ra Asset: players_bronze."""
-        print(f"Fetching players for league {league_id}...")
-        return f"Players fetched for {league_id}"
+        from pipelines.p24.main import ingest_players
+        return ingest_players(league_id)
 
-    # 1. Lấy danh sách giải đấu
     leagues = get_target_leagues()
     
-    # 2. DYNAMIC TASK MAPPING: Airflow sẽ tự tạo N tasks song song cho mỗi giải đấu
     teams_tasks = fetch_teams.expand(league_id=leagues)
     fixtures_tasks = fetch_fixtures.expand(league_id=leagues)
     players_tasks = fetch_players.expand(league_id=leagues)
-
