@@ -2,13 +2,6 @@ football_lake:
   target: dev
   outputs:
     dev:
-      type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user: AIRFLOW_SVC
-      password: "{{ env_var('SNOWFLAKE_PASSWORD', 'Airflow123') }}"
-      role: SYSADMIN
-      database: FOOTBALL_DWH
-      warehouse: FOOTBALL_WH
-      schema: STAGING
+      type: duckdb
+      path: 'football_lake.duckdb'
       threads: 4
-      client_session_keep_alive: False
