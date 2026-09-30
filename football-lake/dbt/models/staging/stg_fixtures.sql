@@ -3,16 +3,13 @@
 ) }}
 
 with raw_data as (
-    select
-        raw_data,
-        ingest_timestamp
-    from {{ source('raw', 'api_football_fixtures') }}
+    select *
+    from read_json_auto('s3://football-lake/raw/api_football/fixtures/**/*.json.gz')
 ),
 
 flattened as (
     select
-        ingest_timestamp,
-        unnest(from_json(raw_data->>'$.response', '["JSON"]')) as fixture_obj
+        unnest(from_json(response, '["JSON"]')) as fixture_obj
     from raw_data
 )
 
@@ -36,8 +33,7 @@ select
     
     -- Goals and Score
     (fixture_obj->>'$.goals.home')::int as home_goals,
-    (fixture_obj->>'$.goals.away')::int as away_goals,
+    (fixture_obj->>'$.goals.away')::int as away_goals
     
-    ingest_timestamp
 from flattened
 where (fixture_obj->>'$.fixture.id') is not null

@@ -3,16 +3,13 @@
 ) }}
 
 with raw_data as (
-    select
-        raw_data,
-        ingest_timestamp
-    from {{ source('raw', 'api_football_players') }}
+    select *
+    from read_json_auto('s3://football-lake/raw/api_football/players_summary/**/*.json.gz')
 ),
 
 flattened as (
     select
-        ingest_timestamp,
-        unnest(from_json(raw_data->>'$.response', '["JSON"]')) as player_obj
+        unnest(from_json(response, '["JSON"]')) as player_obj
     from raw_data
 )
 
@@ -26,8 +23,7 @@ select
     (player_obj->>'$.player.height')::varchar as height,
     (player_obj->>'$.player.weight')::varchar as weight,
     (player_obj->>'$.player.injured')::boolean as is_injured,
-    (player_obj->>'$.player.photo')::varchar as photo_url,
+    (player_obj->>'$.player.photo')::varchar as photo_url
     
-    ingest_timestamp
 from flattened
 where (player_obj->>'$.player.id') is not null

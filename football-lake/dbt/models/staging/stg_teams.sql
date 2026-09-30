@@ -3,16 +3,13 @@
 ) }}
 
 with raw_data as (
-    select
-        raw_data,
-        ingest_timestamp
-    from {{ source('raw', 'api_football_teams') }}
+    select *
+    from read_json_auto('s3://football-lake/raw/api_football/teams/**/*.json.gz')
 ),
 
 flattened as (
     select
-        ingest_timestamp,
-        unnest(from_json(raw_data->>'$.response', '["JSON"]')) as team_obj
+        unnest(from_json(response, '["JSON"]')) as team_obj
     from raw_data
 )
 
@@ -28,8 +25,7 @@ select
     (team_obj->>'$.venue.id')::int as venue_id,
     (team_obj->>'$.venue.name')::varchar as venue_name,
     (team_obj->>'$.venue.city')::varchar as venue_city,
-    (team_obj->>'$.venue.capacity')::int as venue_capacity,
+    (team_obj->>'$.venue.capacity')::int as venue_capacity
     
-    ingest_timestamp
 from flattened
 where (team_obj->>'$.team.id') is not null
