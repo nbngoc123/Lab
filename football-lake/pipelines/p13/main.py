@@ -42,35 +42,33 @@ def fetch_forecast(lat: float, lon: float) -> dict:
 
 
 def load_stadiums() -> list:
-    import io
-    from lake.minio_io import S3, BUCKET
+    import duckdb
+    import pandas as pd
+    from lake.team_lookup import add_team_key
+    import numpy as np
     
-    prefix = "silver/dim/wd_stadiums/"
     try:
-        objs = S3.list_objects_v2(Bucket=BUCKET, Prefix=prefix).get("Contents", [])
-    except Exception as e:
-        print(f"  ! Lỗi S3: {e}")
-        return []
-        
-    dfs = []
-    for obj in objs:
-        if obj["Key"].endswith(".parquet"):
-            body = S3.get_object(Bucket=BUCKET, Key=obj["Key"])["Body"].read()
-            dfs.append(pd.read_parquet(io.BytesIO(body)))
+        # Đường dẫn database trong Docker container hoặc local
+        db_path = "/opt/project/dbt/football_lake.duckdb"
+        if not os.path.exists(db_path):
+            db_path = "dbt/football_lake.duckdb" # Fallback chạy local
             
-    if not dfs:
+        conn = duckdb.connect(db_path, read_only=True)
+        query = "SELECT venue_name as venue, lat, lon FROM main_staging.stg_wikidata_stadiums WHERE lat IS NOT NULL AND lon IS NOT NULL"
+        df = conn.execute(query).df()
+        conn.close()
+    except Exception as e:
+        print(f"  ! Lỗi DuckDB: {e}")
         return []
         
-    df = pd.concat(dfs, ignore_index=True)
-    if "venueLabel" in df.columns:
-        if "venue" in df.columns:
-            df = df.drop(columns=["venue"])
-        df = df.rename(columns={"venueLabel": "venue"})
-    df = df[df.lat.notna() & df.lon.notna()]
+    if df.empty:
+        print("  ! Không tìm thấy sân vận động nào trong DuckDB.")
+        return []
+        
     df = add_team_key(df, "venue", source="openmeteo", out_col="team_key")
     if TEST_MODE:
         df = df.head(2)
-    import numpy as np
+        
     df = df.replace({np.nan: None})
     return df.to_dict("records")
 
