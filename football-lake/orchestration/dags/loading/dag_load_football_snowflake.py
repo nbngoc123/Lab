@@ -1,3 +1,4 @@
+"""
 import os
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -156,3 +157,4 @@ with dag_p24:
     tf_players() >> load_p
 
 globals()["dag_load_p24_api_football_snowflake"] = dag_p24
+"""
