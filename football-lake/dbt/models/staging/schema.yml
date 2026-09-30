@@ -1,0 +1,408 @@
+version: 2
+
+# Test dùng dbt_utils (xem packages.yml). Model tắt mặc định vẫn khai báo ở đây; dbt bỏ qua test của model disabled.
+
+models:
+  - name: stg_odds_base
+    description: "Mọi snapshot odds, 1 dòng/outcome/nhà cái/market/snapshot"
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: market_key
+        tests:
+          - not_null
+      - name: outcome_name
+        tests:
+          - not_null
+  - name: stg_odds_h2h
+    description: "Kèo 1X2 mới nhất"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_id, bookmaker_key, outcome_name]
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: bookmaker_key
+        tests:
+          - not_null
+      - name: outcome_name
+        tests:
+          - not_null
+      - name: price
+        tests:
+          - not_null
+  - name: stg_odds_spreads
+    description: "Kèo chấp mới nhất"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_id, bookmaker_key, team_name]
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: bookmaker_key
+        tests:
+          - not_null
+      - name: team_name
+        tests:
+          - not_null
+  - name: stg_odds_totals
+    description: "Kèo tài/xỉu mới nhất"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_id, bookmaker_key, outcome_name]
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: bookmaker_key
+        tests:
+          - not_null
+      - name: outcome_name
+        tests:
+          - not_null
+  - name: stg_open_meteo
+    description: "Thời tiết lịch sử theo giờ, đã dedup"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [venue_name, weather_time]
+    columns:
+      - name: venue_name
+        tests:
+          - not_null
+      - name: weather_time
+        tests:
+          - not_null
+  - name: stg_open_meteo_forecast
+    description: "Dự báo 7 ngày mới nhất"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [venue_name, weather_time]
+    columns:
+      - name: venue_name
+        tests:
+          - not_null
+      - name: weather_time
+        tests:
+          - not_null
+  - name: stg_physioroom
+    description: "Bảng chấn thương dạng long (chưa typed)"
+    columns:
+      - name: snapshot_date
+        tests:
+          - not_null
+      - name: table_name
+        tests:
+          - not_null
+  - name: stg_teams
+    description: "Đội bóng API-Football"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [team_id, season]
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+  - name: stg_players
+    description: "Cầu thủ API-Football"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [player_id, season]
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+  - name: stg_fixtures
+    description: "Trận đấu API-Football (bản mới nhất)"
+    columns:
+      - name: fixture_id
+        tests:
+          - not_null
+          - unique
+      - name: fixture_date
+        tests:
+          - not_null
+  - name: stg_api_football_standings
+    description: "BXH API-Football"
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: league_id
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+  - name: stg_football_data_co_uk
+    description: "Kết quả + kèo football-data.co.uk"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [division, season_code, match_date, home_team, away_team]
+    columns:
+      - name: division
+        tests:
+          - not_null
+      - name: season_code
+        tests:
+          - not_null
+      - name: match_date
+        tests:
+          - not_null
+      - name: home_team
+        tests:
+          - not_null
+      - name: away_team
+        tests:
+          - not_null
+  - name: stg_football_data_org_matches
+    description: "Trận đấu football-data.org"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_id, competition_code]
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: competition_code
+        tests:
+          - not_null
+  - name: stg_football_data_org_competitions
+    description: "Giải đấu (tắt mặc định)"
+    columns:
+      - name: competition_id
+        tests:
+          - not_null
+          - unique
+  - name: stg_football_data_org_teams
+    description: "Đội (tắt mặc định)"
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+  - name: stg_football_data_org_players
+    description: "Cầu thủ (tắt mặc định)"
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+  - name: stg_football_data_org_standings
+    description: "BXH TOTAL (tắt mặc định)"
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+  - name: stg_thesportsdb_teams
+    description: "Đội TheSportsDB"
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+          - unique
+  - name: stg_thesportsdb_players
+    description: "Cầu thủ TheSportsDB (tắt mặc định)"
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+          - unique
+  - name: stg_thesportsdb_honors
+    description: "Danh hiệu (tắt mặc định)"
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+  - name: stg_thesportsdb_former_teams
+    description: "CLB cũ (tắt mặc định)"
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+  - name: stg_football_news
+    description: "Tin bóng đá p25 (chưa kiểm chứng với mẫu raw)"
+    columns:
+      - name: url
+        tests:
+          - not_null
+          - unique
+  - name: stg_google_news
+    description: "Google News RSS"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [news_id, search_query, language]
+    columns:
+      - name: news_id
+        tests:
+          - not_null
+      - name: published_at
+        tests:
+          - not_null
+  - name: stg_youtube_videos
+    description: "Video YouTube"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [video_id, search_query]
+    columns:
+      - name: video_id
+        tests:
+          - not_null
+  - name: stg_youtube_comments
+    description: "Comment YouTube (bản mới nhất)"
+    columns:
+      - name: comment_id
+        tests:
+          - not_null
+          - unique
+      - name: video_id
+        tests:
+          - not_null
+  - name: stg_understat_matches
+    description: "Trận Understat"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_id, league, season]
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+  - name: stg_understat_players
+    description: "Cầu thủ Understat theo mùa"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [player_id, league, season]
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+  - name: stg_understat_teams
+    description: "Đội Understat theo mùa"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [team_id, league, season]
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+  - name: stg_understat_team_matches
+    description: "Thống kê đội theo từng trận (xG, PPDA...)"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [team_id, league, season, match_date]
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: match_date
+        tests:
+          - not_null
+  - name: stg_understat_shots
+    description: "Cú sút Understat"
+    columns:
+      - name: shot_id
+        tests:
+          - not_null
+          - unique
+      - name: match_id
+        tests:
+          - not_null
+      - name: xg
+        tests:
+          - not_null
+  - name: stg_wikidata
+    description: "Bindings SPARQL thô, snapshot mới nhất"
+    columns:
+      - name: sparql_query_name
+        tests:
+          - not_null
+  - name: stg_wikidata_clubs
+    description: "CLB từ Wikidata"
+    columns:
+      - name: club_qid
+        tests:
+          - not_null
+  - name: stg_wikidata_players
+    description: "Cầu thủ từ Wikidata"
+    columns:
+      - name: player_qid
+        tests:
+          - not_null
+  - name: stg_wikidata_stadiums
+    description: "Sân vận động + tọa độ"
+    columns:
+      - name: venue_qid
+        tests:
+          - not_null
+      - name: lat
+        tests:
+          - not_null
+      - name: lon
+        tests:
+          - not_null
+  - name: stg_wikidata_managers
+    description: "HLV từ Wikidata"
+    columns:
+      - name: coach_qid
+        tests:
+          - not_null
+  - name: stg_wikipedia
+    description: "Nội dung bài Wikipedia"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [page_id, language, category]
+    columns:
+      - name: page_id
+        tests:
+          - not_null
+      - name: language
+        tests:
+          - not_null
+  - name: stg_wikimedia_pageviews
+    description: "Lượt xem theo ngày, đã dedup"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [entity_type, lang, article, view_date]
+    columns:
+      - name: article
+        tests:
+          - not_null
+      - name: lang
+        tests:
+          - not_null
+      - name: view_date
+        tests:
+          - not_null
+      - name: views
+        tests:
+          - not_null
+  - name: stg_wikimedia_top_daily
+    description: "Top bài xem nhiều theo ngày"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [lang, view_date, article]
+    columns:
+      - name: article
+        tests:
+          - not_null
+      - name: view_date
+        tests:
+          - not_null

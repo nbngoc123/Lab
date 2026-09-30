@@ -1,18 +1,15 @@
-{{ config(materialized='table') }}
-{# Bảng vì: ~50k giờ x số sân x số ngày ingest. Dedup giữ bản ingest mới nhất cho mỗi (sân, giờ). #}
+{{ config(materialized='view') }}
+{# Dự báo 7 ngày (p13 có ghi nhưng trước đây chưa có staging). Giữ bản dự báo mới nhất cho mỗi (sân, giờ). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/open_meteo/historical/**/*.json.gz') }},
-                           filename=true, maximum_object_size=67108864)
+    from read_json_objects({{ lake_path('raw/open_meteo/forecast/**/*.json.gz') }}, filename=true)
 ),
 
 hourly as (
     select
         {{ path_part('venue') }}                         as venue_name,
-        {{ path_date() }}                                as ingest_date,
-        {{ jget('doc', '$.latitude', 'double') }}        as latitude,
-        {{ jget('doc', '$.longitude', 'double') }}       as longitude,
+        {{ path_date() }}                                as forecast_issued_date,
         {{ jget('doc', '$.timezone') }}                  as timezone,
         unnest(from_json(json_extract(doc, '$.hourly.time'),                '["VARCHAR"]')) as weather_time_raw,
         unnest(from_json(json_extract(doc, '$.hourly.temperature_2m'),      '["DOUBLE"]'))  as temperature_c,
@@ -24,11 +21,11 @@ hourly as (
 )
 
 select
-    venue_name, ingest_date, latitude, longitude, timezone,
-    try_cast(weather_time_raw as timestamp) as weather_time,   -- giờ địa phương của sân
+    venue_name, forecast_issued_date, timezone,
+    try_cast(weather_time_raw as timestamp) as weather_time,
     temperature_c, precipitation_mm, windspeed_kmh, humidity_pct, weather_code
 from hourly
 where try_cast(weather_time_raw as timestamp) is not null
 qualify row_number() over (
     partition by venue_name, try_cast(weather_time_raw as timestamp)
-    order by ingest_date desc nulls last) = 1
+    order by forecast_issued_date desc nulls last) = 1

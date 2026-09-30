@@ -15,6 +15,14 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+vars:
+  lake_bucket: football-lake
+  # Bật thành 'true' khi đã có code ingest ghi các raw path tương ứng, để tránh dbt lỗi glob rỗng
+  has_fdo_competitions: true
+  has_fdo_teams: true
+  has_fdo_standings: true
+  has_thesportsdb_players: true
+
 models:
   football_lake:
     staging:

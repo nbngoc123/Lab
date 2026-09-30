@@ -1,42 +1,45 @@
 from airflow.sdk import Asset
 
 # ==========================================
-# BRONZE ASSETS (MinIO Data Lake)
+# BRONZE / RAW ASSETS (MinIO Data Lake)
 # ==========================================
-football_fixtures_raw_in = Asset("minio://football-lake/raw/api_football/fixtures")
-football_teams_raw_in = Asset("minio://football-lake/raw/api_football/teams")
-football_players_raw_in = Asset("minio://football-lake/raw/api_football/players")
 
-odds_raw_in = Asset("minio://football-lake/raw/odds")
-reddit_raw_in = Asset("minio://football-lake/raw/reddit")
-news_raw_in = Asset("minio://football-lake/raw/news")
+# API Football
+api_football_fixtures = Asset("minio://football-lake/raw/api_football/fixtures")
+api_football_teams = Asset("minio://football-lake/raw/api_football/teams")
+api_football_players = Asset("minio://football-lake/raw/api_football/players")
 
-# ==========================================
-# RAW ASSETS (Snowflake)
-# ==========================================
-football_fixtures_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_FIXTURES")
-football_teams_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_TEAMS")
-football_players_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/API_FOOTBALL_PLAYERS")
+# Major Sources
+football_data_co_uk = Asset("minio://football-lake/raw/football_data_couk")
+football_data_org = Asset("minio://football-lake/raw/football_data_org")
+understat = Asset("minio://football-lake/raw/understat")
+thesportsdb = Asset("minio://football-lake/raw/thesportsdb")
+open_meteo = Asset("minio://football-lake/raw/open_meteo")
+physioroom = Asset("minio://football-lake/raw/physioroom")
 
-odds_raw = Asset("snowflake://my_account/FOOTBALL_DWH/RAW/ODDS_API")
+# News & Social
+football_news = Asset("minio://football-lake/raw/football_news")
+google_news = Asset("minio://football-lake/raw/google_news")
+youtube = Asset("minio://football-lake/raw/youtube")
+reddit = Asset("minio://football-lake/raw/reddit")
 
-# ==========================================
-# STAGING ASSETS (dbt - Snowflake)
-# ==========================================
-stg_fixtures = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_FIXTURES")
-stg_teams = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_TEAMS")
-stg_odds = Asset("snowflake://my_account/FOOTBALL_DWH/STAGING/STG_ODDS")
-
-# ==========================================
-# CORE ASSETS (dbt - Snowflake)
-# ==========================================
-dim_team = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/DIM_TEAM")
-dim_player = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/DIM_PLAYER")
-fact_match = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/FACT_MATCH")
-fact_odds = Asset("snowflake://my_account/FOOTBALL_DWH/CORE/FACT_ODDS")
+# Wiki & Odds
+wikimedia = Asset("minio://football-lake/raw/wikimedia_pageviews")
+wikidata = Asset("minio://football-lake/raw/wikidata")
+wikipedia = Asset("minio://football-lake/raw/wikipedia")
+odds_api = Asset("minio://football-lake/raw/odds")
 
 # ==========================================
-# MART ASSETS (dbt - Snowflake)
+# STAGING ASSETS (dbt - DuckDB)
 # ==========================================
-football_obt = Asset("snowflake://my_account/FOOTBALL_DWH/MART/FOOTBALL_OBT")
-team_performance = Asset("snowflake://my_account/FOOTBALL_DWH/MART/TEAM_PERFORMANCE")
+# Ghi chú: DuckDB Staging tạo views thay vì ghi file vật lý,
+# nhưng ta vẫn có thể dùng Asset báo hiệu staging hoàn tất
+dbt_staging_complete = Asset("duckdb://football-lake/staging/complete")
+
+# ==========================================
+# CORE / MART ASSETS (dbt - DuckDB)
+# ==========================================
+dim_team = Asset("duckdb://football-lake/core/dim_team")
+dim_player = Asset("duckdb://football-lake/core/dim_player")
+fact_match = Asset("duckdb://football-lake/core/fact_match")
+football_obt = Asset("duckdb://football-lake/mart/football_obt")

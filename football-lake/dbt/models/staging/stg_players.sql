@@ -1,29 +1,35 @@
-{{ config(
-    materialized='view'
-) }}
+{{ config(materialized='view') }}
 
-with raw_data as (
-    select *
-    from read_json_auto('s3://football-lake/raw/api_football/players_summary/**/*.json.gz')
+with raw as (
+    select filename, "json" as doc
+    from read_json_objects({{ lake_path('raw/api_football/players_summary/**/*.json.gz') }}, filename=true)
 ),
 
-flattened as (
-    select
-        unnest(from_json(response, '["JSON"]')) as player_obj
-    from raw_data
+items as (
+    select filename, {{ jarray('doc', '$.response') }} as p from raw
 )
 
 select
-    (player_obj->>'$.player.id')::int as player_id,
-    (player_obj->>'$.player.name')::varchar as name,
-    (player_obj->>'$.player.firstname')::varchar as firstname,
-    (player_obj->>'$.player.lastname')::varchar as lastname,
-    (player_obj->>'$.player.age')::int as age,
-    (player_obj->>'$.player.nationality')::varchar as nationality,
-    (player_obj->>'$.player.height')::varchar as height,
-    (player_obj->>'$.player.weight')::varchar as weight,
-    (player_obj->>'$.player.injured')::boolean as is_injured,
-    (player_obj->>'$.player.photo')::varchar as photo_url
-    
-from flattened
-where (player_obj->>'$.player.id') is not null
+    {{ jget('p', '$.player.id', 'int') }}             as player_id,
+    {{ jget('p', '$.player.name') }}                  as name,
+    {{ jget('p', '$.player.firstname') }}             as firstname,
+    {{ jget('p', '$.player.lastname') }}              as lastname,
+    {{ jget('p', '$.player.age', 'int') }}            as age,
+    {{ jget('p', '$.player.birth.date', 'date') }}    as birth_date,
+    {{ jget('p', '$.player.birth.country') }}         as birth_country,
+    {{ jget('p', '$.player.nationality') }}           as nationality,
+    {{ jget('p', '$.player.height') }}                as height,
+    {{ jget('p', '$.player.weight') }}                as weight,
+    {{ jget('p', '$.player.injured', 'boolean') }}    as is_injured,
+    {{ jget('p', '$.player.photo') }}                 as photo_url,
+    {{ jget('p', '$.statistics[0].team.id', 'int') }} as team_id,
+    {{ jget('p', '$.statistics[0].team.name') }}      as team_name,
+    {{ jget('p', '$.statistics[0].games.position') }} as position,
+    {{ jget('p', '$.statistics[0].league.id', 'int') }} as league_id,
+    {{ jget('p', '$.statistics[0].league.season', 'int') }} as season,
+    {{ path_date() }}                                 as ingest_date
+from items
+where json_extract_string(p, '$.player.id') is not null
+qualify row_number() over (
+    partition by player_id, season
+    order by ingest_date desc nulls last) = 1

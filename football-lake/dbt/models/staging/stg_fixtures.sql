@@ -1,39 +1,43 @@
-{{ config(
-    materialized='view'
-) }}
+{{ config(materialized='view') }}
+{# Dedup: giữ snapshot mới nhất của mỗi fixture (kết quả/trạng thái thay đổi theo thời gian). #}
 
-with raw_data as (
-    select *
-    from read_json_auto('s3://football-lake/raw/api_football/fixtures/**/*.json.gz')
+with raw as (
+    select filename, "json" as doc
+    from read_json_objects({{ lake_path('raw/api_football/fixtures/**/*.json.gz') }}, filename=true)
 ),
 
-flattened as (
-    select
-        unnest(from_json(response, '["JSON"]')) as fixture_obj
-    from raw_data
+items as (
+    select filename, {{ jarray('doc', '$.response') }} as f from raw
 )
 
 select
-    -- Fixture info
-    (fixture_obj->>'$.fixture.id')::int as fixture_id,
-    (fixture_obj->>'$.fixture.date')::timestamp as fixture_date,
-    (fixture_obj->>'$.fixture.status.long')::varchar as status_long,
-    (fixture_obj->>'$.fixture.status.short')::varchar as status_short,
-    
-    -- League info
-    (fixture_obj->>'$.league.id')::int as league_id,
-    (fixture_obj->>'$.league.season')::int as season,
-    (fixture_obj->>'$.league.round')::varchar as round,
-    
-    -- Team info
-    (fixture_obj->>'$.teams.home.id')::int as home_team_id,
-    (fixture_obj->>'$.teams.home.name')::varchar as home_team_name,
-    (fixture_obj->>'$.teams.away.id')::int as away_team_id,
-    (fixture_obj->>'$.teams.away.name')::varchar as away_team_name,
-    
-    -- Goals and Score
-    (fixture_obj->>'$.goals.home')::int as home_goals,
-    (fixture_obj->>'$.goals.away')::int as away_goals
-    
-from flattened
-where (fixture_obj->>'$.fixture.id') is not null
+    {{ jget('f', '$.fixture.id', 'int') }}              as fixture_id,
+    {{ jts('f', '$.fixture.date') }}                    as fixture_date,
+    {{ jget('f', '$.fixture.referee') }}                as referee,
+    {{ jget('f', '$.fixture.venue.id', 'int') }}        as venue_id,
+    {{ jget('f', '$.fixture.venue.name') }}             as venue_name,
+    {{ jget('f', '$.fixture.status.long') }}            as status_long,
+    {{ jget('f', '$.fixture.status.short') }}           as status_short,
+    {{ jget('f', '$.fixture.status.elapsed', 'int') }}  as elapsed_minutes,
+
+    {{ jget('f', '$.league.id', 'int') }}               as league_id,
+    {{ jget('f', '$.league.season', 'int') }}           as season,
+    {{ jget('f', '$.league.round') }}                   as round,
+
+    {{ jget('f', '$.teams.home.id', 'int') }}           as home_team_id,
+    {{ jget('f', '$.teams.home.name') }}                as home_team_name,
+    {{ jget('f', '$.teams.away.id', 'int') }}           as away_team_id,
+    {{ jget('f', '$.teams.away.name') }}                as away_team_name,
+
+    {{ jget('f', '$.goals.home', 'int') }}              as home_goals,
+    {{ jget('f', '$.goals.away', 'int') }}              as away_goals,
+    {{ jget('f', '$.score.halftime.home', 'int') }}     as ht_home_goals,
+    {{ jget('f', '$.score.halftime.away', 'int') }}     as ht_away_goals,
+    {{ jget('f', '$.score.penalty.home', 'int') }}      as pen_home_goals,
+    {{ jget('f', '$.score.penalty.away', 'int') }}      as pen_away_goals,
+    {{ path_date() }}                                   as ingest_date
+from items
+where json_extract_string(f, '$.fixture.id') is not null
+qualify row_number() over (
+    partition by fixture_id
+    order by ingest_date desc nulls last, filename desc) = 1
