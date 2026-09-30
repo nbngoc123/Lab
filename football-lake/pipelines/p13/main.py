@@ -46,6 +46,7 @@ def load_stadiums() -> list:
     import pandas as pd
     from lake.team_lookup import add_team_key
     import numpy as np
+    import os
     
     try:
         # Đường dẫn database trong Docker container hoặc local
@@ -54,6 +55,14 @@ def load_stadiums() -> list:
             db_path = "dbt/football_lake.duckdb" # Fallback chạy local
             
         conn = duckdb.connect(db_path, read_only=True)
+        # Cấu hình S3 credentials để DuckDB có thể đọc các view ánh xạ tới S3 (MinIO)
+        conn.execute("INSTALL httpfs; LOAD httpfs;")
+        conn.execute(f"SET s3_endpoint='{os.getenv('MINIO_ENDPOINT', 'minio:9000').replace('http://', '')}';")
+        conn.execute(f"SET s3_access_key_id='{os.getenv('MINIO_ACCESS_KEY', 'minioadmin')}';")
+        conn.execute(f"SET s3_secret_access_key='{os.getenv('MINIO_SECRET_KEY', 'minioadmin')}';")
+        conn.execute("SET s3_use_ssl=false;")
+        conn.execute("SET s3_url_style='path';")
+        
         query = "SELECT venue_name as venue, lat, lon FROM main_staging.stg_wikidata_stadiums WHERE lat IS NOT NULL AND lon IS NOT NULL"
         df = conn.execute(query).df()
         conn.close()
