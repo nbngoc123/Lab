@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    database: FOOTBALL_DWH
+    schema: RAW
+    tables:
+      - name: api_football_fixtures
+      - name: api_football_teams
+      - name: api_football_players

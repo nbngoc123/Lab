@@ -19,18 +19,12 @@ with DAG(
     tags=['transformation', 'dbt', 'staging'],
 ) as dag:
 
-    @task(outlets=[stg_fixtures, stg_teams])
-    def run_dbt_staging():
-        """Chạy lệnh dbt run --select staging.*"""
-        print("Running dbt models for staging layer...")
-        # Sử dụng DbtRunOperator hoặc BashOperator
-        # return BashOperator(task_id='dbt_run', bash_command='dbt run --select path:models/staging')
-        return "Success"
-    
-    @task
-    def run_dbt_test_staging():
-        """Chạy lệnh dbt test --select staging.* (Data Quality)"""
-        print("Running dbt tests for staging layer...")
-        return "Passed"
+    from airflow.operators.bash import BashOperator
 
-    run_dbt_staging() >> run_dbt_test_staging()
+    run_dbt_staging = BashOperator(
+        task_id='dbt_run_staging',
+        bash_command='cd /opt/project/dbt && dbt build --select staging --profiles-dir .',
+        outlets=[stg_fixtures, stg_teams]
+    )
+
+    run_dbt_staging
