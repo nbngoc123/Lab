@@ -147,6 +147,7 @@ services:
   superset:
     build: ./bi/superset
     container_name: superset
+    user: "root"
     ports:
       - "8088:8088"
     environment:
