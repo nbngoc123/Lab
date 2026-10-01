@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    ports:
+      - "8088:8088"
+    environment:
+      # Bí mật để mã hóa session (Bắt buộc phải có)
+      - SUPERSET_SECRET_KEY=football_lake_superset_very_secret_key_12345
+      # Tắt Talisman để cho phép iframe/http tùy chỉnh dễ dàng
+      - TALISMAN_ENABLED=False
+      # Thiết lập để Superset không load dữ liệu mẫu (nhanh hơn)
+      - SUPERSET_LOAD_EXAMPLES=no
+    volumes:
+      # Map thư mục dbt (chứa file DuckDB) vào trong container để Superset có thể đọc
+      - ../../dbt:/app/dbt
