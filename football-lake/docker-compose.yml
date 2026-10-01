@@ -127,3 +127,37 @@ services:
         condition: service_completed_successfully
     container_name: airflow-dag-processor
     command: dag-processor
+
+  superset-init:
+    build: ./bi/superset
+    container_name: superset-init
+    user: "root"
+    environment:
+      SUPERSET_SECRET_KEY: 'football_lake_superset_very_secret_key_12345'
+    volumes:
+      - superset_home:/app/superset_home
+      - ./dbt:/app/dbt
+    command: >
+      bash -c "superset db upgrade && 
+               superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@superset.com --password admin || true && 
+               superset init && 
+               superset set_database_uri -d DuckDB -u duckdb:///app/dbt/football_lake.duckdb || true"
+
+  superset:
+    build: ./bi/superset
+    container_name: superset
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: 'football_lake_superset_very_secret_key_12345'
+      TALISMAN_ENABLED: 'False'
+      SUPERSET_LOAD_EXAMPLES: 'no'
+    volumes:
+      - superset_home:/app/superset_home
+      - ./dbt:/app/dbt
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+
+volumes:
+  superset_home:
