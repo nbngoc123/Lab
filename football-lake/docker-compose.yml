@@ -65,6 +65,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9002:9000"
+    volumes:
+      - ./clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   airflow-init:
     build: *id001
     env_file: .env
