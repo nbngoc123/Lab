@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Path có fetched_date (không phải ingest_date). Grain: (page_id, language, category). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/wikipedia_articles/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/wikipedia_articles/**/*.json.gz') }}
 )
 
 select

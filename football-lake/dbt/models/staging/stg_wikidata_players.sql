@@ -1,3 +1,4 @@
+{{ config(materialized='view') }}
 {# 1 cầu thủ có thể có nhiều quốc tịch / vị trí => nhiều dòng (grain: player_qid + country + position). #}
 
 select distinct

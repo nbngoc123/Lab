@@ -1,11 +1,23 @@
+{{ config(materialized='view') }}
 {# all_varchar + try_cast: ô trống / cột lệch giữa các mùa không làm vỡ model.
    Ngày có 2 định dạng (dd/mm/yy và dd/mm/yyyy). Season lấy từ path. #}
 
+{% set raw_cols = ['Div','Date','Time','HomeTeam','AwayTeam','FTHG','FTAG','FTR','HTHG','HTAG','HTR','Referee',
+                   'HS','AS','HST','AST','HF','AF','HC','AC','HY','AY','HR','AR',
+                   'B365H','B365D','B365A','AvgH','AvgD','AvgA','MaxH','MaxD','MaxA'] %}
+
 with raw as (
+{%- if lake_has_files('raw/football_data_couk/**/*.csv') | trim == 'true' %}
     select *
     from read_csv({{ lake_path('raw/football_data_couk/**/*.csv') }},
                   header=true, union_by_name=true, all_varchar=true,
                   filename=true, ignore_errors=true)
+{%- else %}
+    -- chưa có CSV nào trong raw: trả bảng rỗng cùng schema
+    select null::varchar as filename,
+           {% for c in raw_cols %}null::varchar as "{{ c }}"{{ ',' if not loop.last }} {% endfor %}
+    where false
+{%- endif %}
 )
 
 select

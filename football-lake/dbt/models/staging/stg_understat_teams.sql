@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Body là dict động {"89": {id,title,history}, ...} => json_each() duyệt từng key. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/understat/teams/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/understat/teams/**/*.json.gz') }}
 ),
 teams as (
     select r.filename, e.value as t from raw r, json_each(r.doc) e

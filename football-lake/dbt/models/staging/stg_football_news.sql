@@ -1,9 +1,10 @@
+{{ config(materialized='view') }}
 {# CHƯA thấy code p25: giả định file là mảng bài báo HOẶC {"articles":[...]}; tên trường theo dạng NewsAPI/GNews.
    Thiếu trường nào => NULL (không vỡ). Kiểm tra lại khi có mẫu raw. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_news/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_news/**/*.json.gz') }}
 ),
 
 articles as (

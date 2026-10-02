@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Dedup: giữ snapshot mới nhất của mỗi fixture (kết quả/trạng thái thay đổi theo thời gian). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/api_football/fixtures/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/api_football/fixtures/**/*.json.gz') }}
 ),
 
 items as (

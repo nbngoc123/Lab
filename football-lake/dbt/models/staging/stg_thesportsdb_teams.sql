@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# p08 ghi: raw/thesportsdb/teams/league=<slug>/ingest_date=<D>/teams.json.gz (trước đây model trỏ sai vào metadata/entity=teams). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/thesportsdb/teams/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/thesportsdb/teams/**/*.json.gz') }}
 ),
 items as (select filename, {{ jarray('doc', '$.teams') }} as t from raw)
 

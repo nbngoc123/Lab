@@ -1,9 +1,9 @@
+{{ config(materialized='view') }}
 {# Grain: (video_id, search_query) - 1 video có thể lên nhiều query. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/youtube/videos/**/*.jsonl.gz') }},
-                           format='newline_delimited', filename=true)
+    from {{ lake_objects('raw/youtube/videos/**/*.jsonl.gz', "format='newline_delimited'") }}
 )
 
 select

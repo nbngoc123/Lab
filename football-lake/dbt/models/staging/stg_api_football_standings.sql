@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# MỚI: ingest có ghi standings nhưng trước đây chưa có staging. standings là mảng-của-mảng (nhóm -> đội). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/api_football/standings/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/api_football/standings/**/*.json.gz') }}
 ),
 
 leagues as (

@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Glob trúng cả 2 layout: teams/league=X/season=Y/ và teams/season=Y/ (module cũ). Dedup theo (team, season). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/api_football/teams/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/api_football/teams/**/*.json.gz') }}
 ),
 
 items as (

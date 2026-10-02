@@ -1,9 +1,10 @@
+{{ config(materialized='view') }}
 {# Base: bindings thô của SPARQL, CHỈ snapshot mới nhất của mỗi query.
    Các model stg_wikidata_* bên dưới parse thành cột typed. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/wikidata/sparql/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/wikidata/sparql/**/*.json.gz') }}
 ),
 
 unnested as (

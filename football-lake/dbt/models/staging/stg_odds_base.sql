@@ -1,9 +1,10 @@
+{{ config(materialized='view') }}
 {# Làm phẳng 1 lần: mỗi dòng = 1 outcome / 1 nhà cái / 1 market / 1 snapshot.
    GIỮ TOÀN BỘ snapshot (dùng cho phân tích biến động kèo). Các model h2h/spreads/totals lấy bản mới nhất. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/odds/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/odds/**/*.json.gz') }}
 ),
 
 matches as (

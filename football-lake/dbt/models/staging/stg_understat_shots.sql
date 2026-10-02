@@ -1,8 +1,9 @@
+{{ config(materialized='table') }}
 {# Body {"h":[...],"a":[...]}. Path: shots/league=/season=/match_id=/shots.json.gz (không có ingest_date, 1 file/trận). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/understat/shots/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/understat/shots/**/*.json.gz') }}
 ),
 
 sides as (

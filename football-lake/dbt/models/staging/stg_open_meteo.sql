@@ -1,9 +1,9 @@
+{{ config(materialized='table') }}
 {# Bảng vì: ~50k giờ x số sân x số ngày ingest. Dedup giữ bản ingest mới nhất cho mỗi (sân, giờ). #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/open_meteo/historical/**/*.json.gz') }},
-                           filename=true, maximum_object_size=67108864)
+    from {{ lake_objects('raw/open_meteo/historical/**/*.json.gz', "maximum_object_size=67108864") }}
 ),
 
 hourly as (

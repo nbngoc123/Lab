@@ -1,9 +1,9 @@
-{{ config(materialized='view', enabled=var('has_fdo_teams', false)) }}
+{{ config(materialized='view') }}
 {# Squad nằm trong body teams; bật cùng has_fdo_teams. Giữ competition_code để phân biệt CLB ở PL vs CL. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_data_org/teams/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_data_org/teams/**/*.json.gz') }}
 ),
 teams as (
     select filename, {{ jget('doc', '$.competition.code') }} as body_comp, {{ jarray('doc', '$.teams') }} as t from raw

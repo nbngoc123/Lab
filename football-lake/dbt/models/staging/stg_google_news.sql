@@ -1,10 +1,10 @@
+{{ config(materialized='view') }}
 {# published là RFC-822 ("Tue, 29 Sep 2026 10:00:00 GMT") nên cast thẳng ::timestamp sẽ lỗi -> dùng strptime.
    Grain: (news_id, search_query, language) - cùng 1 bài có thể xuất hiện ở nhiều query. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/rss/google_news/**/*.jsonl.gz') }},
-                           format='newline_delimited', filename=true)
+    from {{ lake_objects('raw/rss/google_news/**/*.jsonl.gz', "format='newline_delimited'") }}
 )
 
 select

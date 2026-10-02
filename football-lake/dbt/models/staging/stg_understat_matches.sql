@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Thêm league/season từ path (trước đây mất => không phân biệt được mùa). Dedup theo snapshot mới nhất. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/understat/matches/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/understat/matches/**/*.json.gz') }}
 )
 
 select

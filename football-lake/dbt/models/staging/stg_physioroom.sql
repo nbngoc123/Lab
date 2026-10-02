@@ -1,3 +1,4 @@
+{{ config(materialized='view') }}
 {# tables_raw.json.gz = mảng gồm 4 bảng (theo thứ tự p16.parse_tables):
    0 tổng chấn thương/CLB | 1 danh sách cầu thủ | 2 loại chấn thương/CLB | 3 tần suất loại chấn thương.
    Chưa biết tên cột thật của từng bảng nên trả dạng long (row_json). Khi có mẫu, viết model typed cho từng table_name.
@@ -6,8 +7,7 @@
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/physioroom/injury_table/**/tables_raw.json.gz') }},
-                           format='unstructured', filename=true)
+    from {{ lake_objects('raw/physioroom/injury_table/**/tables_raw.json.gz', "format='unstructured'") }}
 ),
 
 idx as (

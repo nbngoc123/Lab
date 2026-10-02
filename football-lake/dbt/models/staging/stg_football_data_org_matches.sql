@@ -1,8 +1,9 @@
+{{ config(materialized='view') }}
 {# Body lỗi (403/429 bị p09 lưu như data) không có key 'matches' => 0 dòng thay vì vỡ. #}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_data_org/matches/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_data_org/matches/**/*.json.gz') }}
 ),
 
 items as (

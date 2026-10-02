@@ -1,7 +1,8 @@
+{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/understat/players/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/understat/players/**/*.json.gz') }}
 )
 
 select
