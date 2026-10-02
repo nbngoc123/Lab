@@ -1,9 +1,8 @@
-{{ config(materialized='view', enabled=var('has_fdo_standings', false)) }}
-{# TẮT mặc định: chưa có producer cho raw/football_data_org/standings/. Chỉ lấy bảng TOTAL. #}
+{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_data_org/standings/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_data_org/standings/**/*.json.gz') }}
 ),
 st as (
     select

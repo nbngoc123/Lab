@@ -1,9 +1,8 @@
-{{ config(materialized='view', enabled=var('has_fdo_competitions', false)) }}
-{# TẮT mặc định: p09 hiện chưa ghi raw/football_data_org/competitions/. Bật: vars: {has_fdo_competitions: true} #}
+{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_data_org/competitions/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_data_org/competitions/**/*.json.gz') }}
 ),
 items as (select filename, {{ jarray('doc', '$.competitions') }} as c from raw)
 

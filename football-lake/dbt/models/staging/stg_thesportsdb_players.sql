@@ -1,9 +1,8 @@
-{{ config(materialized='view', enabled=var('has_thesportsdb_players', false)) }}
-{# TẮT mặc định: p08 chưa ghi raw/thesportsdb/metadata/entity=players/. #}
+{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/thesportsdb/metadata/entity=players/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/thesportsdb/metadata/entity=players/**/*.json.gz') }}
 ),
 items as (select filename, {{ jarray('doc', '$.player') }} as p from raw)
 

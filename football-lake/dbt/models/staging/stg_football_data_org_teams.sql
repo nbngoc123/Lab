@@ -1,9 +1,8 @@
-{{ config(materialized='view', enabled=var('has_fdo_teams', false)) }}
-{# TẮT mặc định: chưa có producer cho raw/football_data_org/teams/. Bật: vars: {has_fdo_teams: true} #}
+{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc
-    from read_json_objects({{ lake_path('raw/football_data_org/teams/**/*.json.gz') }}, filename=true)
+    from {{ lake_objects('raw/football_data_org/teams/**/*.json.gz') }}
 ),
 items as (
     select filename, {{ jget('doc', '$.competition.code') }} as body_comp, {{ jarray('doc', '$.teams') }} as t from raw
