@@ -54,7 +54,10 @@ def create_views():
         return
         
     print(f"Connecting to DuckDB BI instance: {db_path}...")
-    con = duckdb.connect(db_path)
+    db_path_tmp = db_path + '.tmp'
+    if os.path.exists(db_path_tmp):
+        os.remove(db_path_tmp)
+    con = duckdb.connect(db_path_tmp)
     
     # Configure S3 for DuckDB
     con.execute("INSTALL httpfs; LOAD httpfs;")
@@ -70,8 +73,11 @@ def create_views():
         con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema};")
         con.execute(f"CREATE OR REPLACE VIEW {schema}.{table} AS SELECT * FROM read_parquet('{path}');")
         
-    print("All views created successfully in superset_bi.duckdb!")
+    print("All views created successfully in superset_bi.duckdb.tmp!")
     con.close()
+    
+    os.replace(db_path_tmp, db_path)
+    print("Replaced superset_bi.duckdb atomically!")
 
 if __name__ == '__main__':
     create_views()
