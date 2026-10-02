@@ -7,16 +7,16 @@
                    'B365H','B365D','B365A','AvgH','AvgD','AvgA','MaxH','MaxD','MaxA'] %}
 
 with raw as (
+    -- Luôn định nghĩa schema chuẩn để tránh lỗi thiếu cột
+    select null::varchar as filename,
+           {% for c in raw_cols %}null::varchar as "{{ c }}"{{ ',' if not loop.last }} {% endfor %}
+    where false
 {%- if lake_has_files('raw/football_data_couk/**/*.csv') | trim == 'true' %}
+    union all by name
     select *
     from read_csv({{ lake_path('raw/football_data_couk/**/*.csv') }},
                   header=true, union_by_name=true, all_varchar=true,
                   filename=true, ignore_errors=true)
-{%- else %}
-    -- chưa có CSV nào trong raw: trả bảng rỗng cùng schema
-    select null::varchar as filename,
-           {% for c in raw_cols %}null::varchar as "{{ c }}"{{ ',' if not loop.last }} {% endfor %}
-    where false
 {%- endif %}
 )
 
