@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# venue_lat/venue_lon parse từ WKT "Point(lon lat)": nguồn cho p13 (Open-Meteo) thay vì tự dựng silver/dim/wd_stadiums. #}
 
 select distinct

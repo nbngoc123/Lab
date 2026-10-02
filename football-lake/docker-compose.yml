@@ -66,19 +66,7 @@ services:
       timeout: 5s
       retries: 5
 
-  clickhouse:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse
-    ports:
-      - "8123:8123"
-      - "9002:9000"
-    volumes:
-      - ./clickhouse-data:/var/lib/clickhouse
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
   airflow-init:
     build: *id001
     env_file: .env
@@ -155,7 +143,7 @@ services:
       bash -c "superset db upgrade && 
                superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@superset.com --password admin || true && 
                superset init && 
-               superset set_database_uri -d DuckDB -u duckdb:///app/dbt/football_lake.duckdb || true &&
+               superset set_database_uri -d DuckDB -u duckdb:///app/dbt/superset_bi.duckdb || true &&
                chown -R superset:superset /app/superset_home"
 
   superset:

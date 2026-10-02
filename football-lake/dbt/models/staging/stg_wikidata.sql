@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Base: bindings thô của SPARQL, CHỈ snapshot mới nhất của mỗi query.
    Các model stg_wikidata_* bên dưới parse thành cột typed. #}
 

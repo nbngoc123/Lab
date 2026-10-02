@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Dedup: giữ snapshot mới nhất của mỗi fixture (kết quả/trạng thái thay đổi theo thời gian). #}
 
 with raw as (

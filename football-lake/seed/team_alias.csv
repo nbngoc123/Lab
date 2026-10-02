@@ -1,5 +1,4 @@
 source,alias,team_key
-# === EPL 2024-25 ===
 fd,Arsenal,Arsenal
 fd,Aston Villa,Aston Villa
 fd,Bournemouth,Bournemouth
@@ -20,7 +19,6 @@ fd,Southampton,Southampton
 fd,Spurs,Tottenham Hotspur
 fd,West Ham,West Ham United
 fd,Wolves,Wolverhampton
-# football-data.co.uk (historical, mùa cũ)
 fd,Tottenham,Tottenham Hotspur
 fd,Manchester City,Manchester City
 fd,Manchester United,Manchester United
@@ -31,7 +29,6 @@ fd,Burnley,Burnley
 fd,Watford,Watford
 fd,Sheffield United,Sheffield United
 fd,Huddersfield,Huddersfield Town
-# === API-Football / Understat ===
 apifootball,Arsenal FC,Arsenal
 apifootball,Chelsea FC,Chelsea
 apifootball,Liverpool FC,Liverpool
@@ -72,7 +69,6 @@ understat,Bournemouth,Bournemouth
 understat,Leicester,Leicester City
 understat,Ipswich,Ipswich Town
 understat,Southampton,Southampton
-# === Open-Meteo venue_map ===
 openmeteo,Emirates Stadium,Arsenal
 openmeteo,Anfield,Liverpool
 openmeteo,City of Manchester Stadium,Manchester City
@@ -93,7 +89,6 @@ openmeteo,Vitality Stadium,Bournemouth
 openmeteo,King Power Stadium,Leicester City
 openmeteo,Portman Road,Ipswich Town
 openmeteo,St Mary's Stadium,Southampton
-# === TheSportsDB ===
 thesportsdb,Arsenal,Arsenal
 thesportsdb,Chelsea,Chelsea
 thesportsdb,Liverpool,Liverpool
@@ -101,7 +96,6 @@ thesportsdb,Manchester City,Manchester City
 thesportsdb,Manchester United,Manchester United
 thesportsdb,Newcastle United,Newcastle United
 thesportsdb,Tottenham Hotspur,Tottenham Hotspur
-# === Wikidata ===
 wikidata,Arsenal F.C.,Arsenal
 wikidata,Chelsea F.C.,Chelsea
 wikidata,Liverpool F.C.,Liverpool
@@ -122,7 +116,6 @@ wikidata,A.F.C. Bournemouth,Bournemouth
 wikidata,Leicester City F.C.,Leicester City
 wikidata,Ipswich Town F.C.,Ipswich Town
 wikidata,Southampton F.C.,Southampton
-# === Reddit / Odds API (tên tự do) ===
 reddit,Arsenal,Arsenal
 reddit,Chelsea,Chelsea
 reddit,Liverpool,Liverpool
@@ -163,7 +156,7 @@ fd,Sunderland,Sunderland
 understat,Sunderland,Sunderland
 wikidata,Wolverhampton,Wolverhampton
 wikidata,AC Milan,AC Milan
-wikidata,AS Roma,AS Roma
+wikidata,AS Roma,Roma
 wikidata,Athletic Bilbao,Athletic Bilbao
 wikidata,Atlético Madrid,Atlético Madrid
 wikidata,Bayer Leverkusen,Bayer Leverkusen
@@ -173,7 +166,7 @@ wikidata,Bundesliga,Bundesliga
 wikidata,Champions League,Champions League
 wikidata,Eintracht Frankfurt,Eintracht Frankfurt
 wikidata,European Championship,European Championship
-wikidata,FC Barcelona,FC Barcelona
+wikidata,FC Barcelona,Barcelona
 wikidata,FIFA World Cup,FIFA World Cup
 wikidata,Inter Milan,Inter Milan
 wikidata,Juventus,Juventus
@@ -183,7 +176,7 @@ wikidata,Lyon,Lyon
 wikidata,Marseille,Marseille
 wikidata,Monaco,Monaco
 wikidata,Napoli,Napoli
-wikidata,PSG,PSG
+wikidata,PSG,Paris Saint-Germain
 wikidata,Premier League,Premier League
 wikidata,RB Leipzig,RB Leipzig
 wikidata,Real Betis,Real Betis
@@ -201,14 +194,14 @@ fd,Alaves,Alaves
 fd,Almeria,Almeria
 fd,Angers,Angers
 fd,Atalanta,Atalanta
-fd,Ath Bilbao,Ath Bilbao
-fd,Ath Madrid,Ath Madrid
+fd,Ath Bilbao,Athletic Bilbao
+fd,Ath Madrid,Atlético Madrid
 fd,Augsburg,Augsburg
 fd,Auxerre,Auxerre
 fd,Barcelona,Barcelona
 fd,Barnsley,Barnsley
 fd,Benevento,Benevento
-fd,Betis,Betis
+fd,Betis,Real Betis
 fd,Bielefeld,Bielefeld
 fd,Birmingham,Birmingham
 fd,Blackburn,Blackburn
@@ -221,23 +214,23 @@ fd,Bristol City,Bristol City
 fd,Cadiz,Cadiz
 fd,Cagliari,Cagliari
 fd,Cardiff,Cardiff
-fd,Celta,Celta
+fd,Celta,Celta Vigo
 fd,Charlton,Charlton
 fd,Clermont,Clermont
 fd,Como,Como
-fd,Coventry,Coventry
+fd,Coventry,Coventry City
 fd,Cremonese,Cremonese
 fd,Crotone,Crotone
 fd,Darmstadt,Darmstadt
 fd,Derby,Derby
 fd,Dijon,Dijon
-fd,Dortmund,Dortmund
+fd,Dortmund,Borussia Dortmund
 fd,Eibar,Eibar
-fd,Ein Frankfurt,Ein Frankfurt
+fd,Ein Frankfurt,Eintracht Frankfurt
 fd,Elche,Elche
 fd,Empoli,Empoli
-fd,Espanol,Espanol
-fd,FC Koln,FC Koln
+fd,Espanol,Espanyol
+fd,FC Koln,1. FC Köln
 fd,Fiorentina,Fiorentina
 fd,Freiburg,Freiburg
 fd,Frosinone,Frosinone
@@ -246,14 +239,14 @@ fd,Getafe,Getafe
 fd,Girona,Girona
 fd,Granada,Granada
 fd,Greuther Furth,Greuther Furth
-fd,Hamburg,Hamburg
+fd,Hamburg,Hamburger SV
 fd,Heidenheim,Heidenheim
 fd,Hertha,Hertha
 fd,Hoffenheim,Hoffenheim
 fd,Holstein Kiel,Holstein Kiel
 fd,Huesca,Huesca
-fd,Hull,Hull
-fd,Inter,Inter
+fd,Hull,Hull City
+fd,Inter,Inter Milan
 fd,Las Palmas,Las Palmas
 fd,Lazio,Lazio
 fd,Le Havre,Le Havre
@@ -261,16 +254,16 @@ fd,Lecce,Lecce
 fd,Leganes,Leganes
 fd,Lens,Lens
 fd,Levante,Levante
-fd,Leverkusen,Leverkusen
+fd,Leverkusen,Bayer Leverkusen
 fd,Lille,Lille
 fd,Lorient,Lorient
 fd,Luton,Luton
-fd,M'gladbach,M'gladbach
+fd,M'gladbach,Borussia Mönchengladbach
 fd,Mainz,Mainz
 fd,Mallorca,Mallorca
 fd,Metz,Metz
 fd,Middlesbrough,Middlesbrough
-fd,Milan,Milan
+fd,Milan,AC Milan
 fd,Millwall,Millwall
 fd,Montpellier,Montpellier
 fd,Monza,Monza
@@ -281,7 +274,7 @@ fd,Osasuna,Osasuna
 fd,Oviedo,Oviedo
 fd,Oxford,Oxford
 fd,Paris FC,Paris FC
-fd,Paris SG,Paris SG
+fd,Paris SG,Paris Saint-Germain
 fd,Parma,Parma
 fd,Peterboro,Peterboro
 fd,Pisa,Pisa
@@ -299,13 +292,13 @@ fd,Sampdoria,Sampdoria
 fd,Sassuolo,Sassuolo
 fd,Schalke 04,Schalke 04
 fd,Sheffield Weds,Sheffield Weds
-fd,Sociedad,Sociedad
+fd,Sociedad,Real Sociedad
 fd,Spezia,Spezia
 fd,St Etienne,St Etienne
 fd,St Pauli,St Pauli
 fd,Stoke,Stoke
 fd,Strasbourg,Strasbourg
-fd,Stuttgart,Stuttgart
+fd,Stuttgart,VfB Stuttgart
 fd,Swansea,Swansea
 fd,Torino,Torino
 fd,Toulouse,Toulouse
@@ -313,7 +306,7 @@ fd,Troyes,Troyes
 fd,Udinese,Udinese
 fd,Union Berlin,Union Berlin
 fd,Valladolid,Valladolid
-fd,Vallecano,Vallecano
+fd,Vallecano,Rayo Vallecano
 fd,Venezia,Venezia
 fd,Verona,Verona
 fd,Werder Bremen,Werder Bremen
@@ -326,7 +319,7 @@ youtube,Arsenal highlight,Arsenal
 youtube,Bóng đá Việt Nam highlight,unknown
 youtube,Bản tin bóng đá 24h,unknown
 youtube,Highlight bóng đá quốc tế mới nhất,unknown
-youtube,Manchester United tin tức,Man United
+youtube,Manchester United tin tức,Manchester United
 youtube,Ngoại hạng Anh highlight,unknown
 youtube,Real Madrid highlight,Real Madrid
 youtube,Tin tức Ngoại hạng Anh,unknown
@@ -336,121 +329,121 @@ youtube,Tin tức bóng đá Ligue 1,unknown
 youtube,Tin tức bóng đá Serie A,unknown
 youtube,Điểm tin bóng đá thế giới,unknown
 fdo,1. FC Köln,1. FC Köln
-fdo,1. FC Union Berlin,1. FC Union Berlin
-fdo,1. FSV Mainz 05,1. FSV Mainz 05
-fdo,AC Monza,AC Monza
-fdo,ACF Fiorentina,ACF Fiorentina
-fdo,AJ Auxerre,AJ Auxerre
-fdo,AS Monaco FC,AS Monaco FC
-fdo,Angers SCO,Angers SCO
+fdo,1. FC Union Berlin,Union Berlin
+fdo,1. FSV Mainz 05,Mainz
+fdo,AC Monza,Monza
+fdo,ACF Fiorentina,Fiorentina
+fdo,AJ Auxerre,Auxerre
+fdo,AS Monaco FC,Monaco
+fdo,Angers SCO,Angers
 fdo,Aston Villa FC,Aston Villa
-fdo,Atalanta BC,Atalanta BC
-fdo,Athletic Club,Athletic Club
-fdo,Bayer 04 Leverkusen,Bayer 04 Leverkusen
-fdo,Bologna FC 1909,Bologna FC 1909
+fdo,Atalanta BC,Atalanta
+fdo,Athletic Club,Athletic Bilbao
+fdo,Bayer 04 Leverkusen,Bayer Leverkusen
+fdo,Bologna FC 1909,Bologna
 fdo,Borussia Mönchengladbach,Borussia Mönchengladbach
 fdo,Brighton & Hove Albion FC,Brighton
-fdo,CA Osasuna,CA Osasuna
-fdo,Cagliari Calcio,Cagliari Calcio
-fdo,Club Atlético de Madrid,Club Atlético de Madrid
+fdo,CA Osasuna,Osasuna
+fdo,Cagliari Calcio,Cagliari
+fdo,Club Atlético de Madrid,Atlético Madrid
 fdo,Club Brugge KV,Club Brugge KV
-fdo,Como 1907,Como 1907
-fdo,Coventry City FC,Coventry City FC
+fdo,Como 1907,Como
+fdo,Coventry City FC,Coventry City
 fdo,Crystal Palace FC,Crystal Palace
-fdo,Deportivo Alavés,Deportivo Alavés
-fdo,ES Troyes AC,ES Troyes AC
-fdo,Elche CF,Elche CF
-fdo,FC Augsburg,FC Augsburg
-fdo,FC Bayern München,FC Bayern München
-fdo,FC Internazionale Milano,FC Internazionale Milano
-fdo,FC Lorient,FC Lorient
+fdo,Deportivo Alavés,Alaves
+fdo,ES Troyes AC,Troyes
+fdo,Elche CF,Elche
+fdo,FC Augsburg,Augsburg
+fdo,FC Bayern München,Bayern Munich
+fdo,FC Internazionale Milano,Inter Milan
+fdo,FC Lorient,Lorient
 fdo,FC Porto,FC Porto
-fdo,FC Schalke 04,FC Schalke 04
+fdo,FC Schalke 04,Schalke 04
 fdo,FK Bodø/Glimt,FK Bodø/Glimt
 fdo,FK Shakhtar Donetsk,FK Shakhtar Donetsk
 fdo,Fenerbahçe SK,Fenerbahçe SK
 fdo,Feyenoord Rotterdam,Feyenoord Rotterdam
-fdo,Frosinone Calcio,Frosinone Calcio
+fdo,Frosinone Calcio,Frosinone
 fdo,Galatasaray SK,Galatasaray SK
-fdo,Genoa CFC,Genoa CFC
-fdo,Getafe CF,Getafe CF
+fdo,Genoa CFC,Genoa
+fdo,Getafe CF,Getafe
 fdo,Hamburger SV,Hamburger SV
-fdo,Hull City AFC,Hull City AFC
-fdo,Ipswich Town FC,Ipswich
-fdo,Juventus FC,Juventus FC
+fdo,Hull City AFC,Hull City
+fdo,Ipswich Town FC,Ipswich Town
+fdo,Juventus FC,Juventus
 fdo,LASK Linz,LASK Linz
-fdo,Le Havre AC,Le Havre AC
+fdo,Le Havre AC,Le Havre
 fdo,Le Mans FC,Le Mans FC
-fdo,Leeds United FC,Leeds
-fdo,Levante UD,Levante UD
-fdo,Lille OSC,Lille OSC
-fdo,Manchester City FC,Man City
-fdo,Manchester United FC,Man United
+fdo,Leeds United FC,Leeds United
+fdo,Levante UD,Levante
+fdo,Lille OSC,Lille
+fdo,Manchester City FC,Manchester City
+fdo,Manchester United FC,Manchester United
 fdo,Málaga CF,Málaga CF
-fdo,Newcastle United FC,Newcastle
-fdo,Nottingham Forest FC,Nott'm Forest
-fdo,OGC Nice,OGC Nice
-fdo,Olympique Lyonnais,Olympique Lyonnais
-fdo,Olympique de Marseille,Olympique de Marseille
+fdo,Newcastle United FC,Newcastle United
+fdo,Nottingham Forest FC,Nottingham Forest
+fdo,OGC Nice,Nice
+fdo,Olympique Lyonnais,Lyon
+fdo,Olympique de Marseille,Marseille
 fdo,PAE AEK,PAE AEK
 fdo,PSV,PSV
-fdo,Paris Saint-Germain FC,Paris Saint-Germain FC
-fdo,Parma Calcio 1913,Parma Calcio 1913
-fdo,RC Celta de Vigo,RC Celta de Vigo
+fdo,Paris Saint-Germain FC,Paris Saint-Germain
+fdo,Parma Calcio 1913,Parma
+fdo,RC Celta de Vigo,Celta Vigo
 fdo,RC Deportivo La Coruña,RC Deportivo La Coruña
-fdo,RC Strasbourg Alsace,RC Strasbourg Alsace
-fdo,RCD Espanyol de Barcelona,RCD Espanyol de Barcelona
-fdo,Racing Club de Lens,Racing Club de Lens
-fdo,Rayo Vallecano de Madrid,Rayo Vallecano de Madrid
-fdo,Real Betis Balompié,Real Betis Balompié
-fdo,Real Madrid CF,Real Madrid CF
+fdo,RC Strasbourg Alsace,Strasbourg
+fdo,RCD Espanyol de Barcelona,Espanyol
+fdo,Racing Club de Lens,Lens
+fdo,Rayo Vallecano de Madrid,Rayo Vallecano
+fdo,Real Betis Balompié,Real Betis
+fdo,Real Madrid CF,Real Madrid
 fdo,Real Racing Club de Santander,Real Racing Club de Santander
-fdo,Real Sociedad de Fútbol,Real Sociedad de Fútbol
-fdo,SC Freiburg,SC Freiburg
+fdo,Real Sociedad de Fútbol,Real Sociedad
+fdo,SC Freiburg,Freiburg
 fdo,SC Paderborn 07,SC Paderborn 07
 fdo,SK Slavia Praha,SK Slavia Praha
-fdo,SS Lazio,SS Lazio
-fdo,SSC Napoli,SSC Napoli
+fdo,SS Lazio,Lazio
+fdo,SSC Napoli,Napoli
 fdo,SV 07 Elversberg,SV 07 Elversberg
-fdo,SV Werder Bremen,SV Werder Bremen
+fdo,SV Werder Bremen,Werder Bremen
 fdo,Sabah FK,Sabah FK
-fdo,Sevilla FC,Sevilla FC
+fdo,Sevilla FC,Sevilla
 fdo,Sporting Clube de Portugal,Sporting Clube de Portugal
-fdo,Stade Brestois 29,Stade Brestois 29
-fdo,Stade Rennais FC 1901,Stade Rennais FC 1901
-fdo,Sunderland AFC,Sunderland AFC
-fdo,TSG 1899 Hoffenheim,TSG 1899 Hoffenheim
-fdo,Torino FC,Torino FC
-fdo,Tottenham Hotspur FC,Tottenham
-fdo,Toulouse FC,Toulouse FC
-fdo,US Lecce,US Lecce
-fdo,US Sassuolo Calcio,US Sassuolo Calcio
-fdo,Udinese Calcio,Udinese Calcio
-fdo,Valencia CF,Valencia CF
-fdo,Venezia FC,Venezia FC
+fdo,Stade Brestois 29,Brest
+fdo,Stade Rennais FC 1901,Rennes
+fdo,Sunderland AFC,Sunderland
+fdo,TSG 1899 Hoffenheim,Hoffenheim
+fdo,Torino FC,Torino
+fdo,Tottenham Hotspur FC,Tottenham Hotspur
+fdo,Toulouse FC,Toulouse
+fdo,US Lecce,Lecce
+fdo,US Sassuolo Calcio,Sassuolo
+fdo,Udinese Calcio,Udinese
+fdo,Valencia CF,Valencia
+fdo,Venezia FC,Venezia
 fdo,VfB Stuttgart,VfB Stuttgart
 fdo,Viking FK,Viking FK
-fdo,Villarreal CF,Villarreal CF
+fdo,Villarreal CF,Villarreal
 fdo,ŠK Slovan Bratislava,ŠK Slovan Bratislava
-wikidata,Alexander Isak,Newcastle
+wikidata,Alexander Isak,Newcastle United
 wikidata,Alisson,Liverpool
-wikidata,Ange Postecoglou,Tottenham
-wikidata,Bernardo Silva,Man City
-wikidata,Bruno Fernandes,Man United
+wikidata,Ange Postecoglou,Tottenham Hotspur
+wikidata,Bernardo Silva,Manchester City
+wikidata,Bruno Fernandes,Manchester United
 wikidata,Bukayo Saka,Arsenal
 wikidata,Carlo Ancelotti,unknown
 wikidata,Cole Palmer,Chelsea
 wikidata,Cristiano Ronaldo,unknown
 wikidata,Declan Rice,Arsenal
-wikidata,Erling Haaland,Man City
+wikidata,Erling Haaland,Manchester City
 wikidata,Gavi,unknown
 wikidata,Harry Kane,unknown
-wikidata,Heung-min Son,Tottenham
-wikidata,James Maddison,Tottenham
+wikidata,Heung-min Son,Tottenham Hotspur
+wikidata,James Maddison,Tottenham Hotspur
 wikidata,José Mourinho,unknown
 wikidata,Jude Bellingham,unknown
-wikidata,Kevin De Bruyne,Man City
-wikidata,Kobbie Mainoo,Man United
+wikidata,Kevin De Bruyne,Manchester City
+wikidata,Kobbie Mainoo,Manchester United
 wikidata,Kylian Mbappé,unknown
 wikidata,Lamine Yamal,unknown
 wikidata,Lionel Messi,unknown
@@ -461,11 +454,11 @@ wikidata,Mohamed Salah,Liverpool
 wikidata,Neymar,unknown
 wikidata,Ollie Watkins,Aston Villa
 wikidata,Pedri,unknown
-wikidata,Pep Guardiola,Man City
-wikidata,Phil Foden,Man City
+wikidata,Pep Guardiola,Manchester City
+wikidata,Phil Foden,Manchester City
 wikidata,Robert Lewandowski,unknown
-wikidata,Rodri,Man City
-wikidata,Rúben Dias,Man City
+wikidata,Rodri,Manchester City
+wikidata,Rúben Dias,Manchester City
 wikidata,Thomas Tuchel,unknown
 wikidata,Toni Kroos,unknown
 wikidata,Trent Alexander-Arnold,Liverpool

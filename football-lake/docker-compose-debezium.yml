@@ -1,0 +1,76 @@
+version: '3.8'
+
+networks:
+  football-lake_default:
+    external: true
+
+services:
+  postgres-cdc:
+    image: postgres:15
+    container_name: postgres-cdc
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=testdb
+    command: ["postgres", "-c", "wal_level=logical"]
+    networks:
+      - football-lake_default
+    
+  zookeeper-cdc:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper-cdc
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - football-lake_default
+
+  kafka-cdc:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka-cdc
+    depends_on:
+      - zookeeper-cdc
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-cdc:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-cdc:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - football-lake_default
+
+  debezium:
+    image: quay.io/debezium/connect:2.4
+    container_name: debezium
+    depends_on:
+      - kafka-cdc
+      - postgres-cdc
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka-cdc:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+    networks:
+      - football-lake_default
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8081:8080" # Đổi port sang 8081 vì Airflow đang dùng 8080
+    depends_on:
+      - kafka-cdc
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-cdc:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper-cdc:2181
+    networks:
+      - football-lake_default

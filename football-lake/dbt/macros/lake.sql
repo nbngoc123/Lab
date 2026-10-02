@@ -48,3 +48,22 @@ try_cast(regexp_extract(json_extract_string({{ col }}, '$.{{ field }}.value'), '
 {% macro wd_date(col, field) -%}
 try_cast(left(json_extract_string({{ col }}, '$.{{ field }}.value'), 10) as date)
 {%- endmacro %}
+
+{# ===== Chịu được raw chưa có file =====
+   DuckDB báo lỗi "No files found" nếu glob rỗng => 1 nguồn chưa ingest làm sập cả `dbt build`.
+   lake_objects() kiểm tra glob lúc chạy; rỗng thì trả về bảng rỗng cùng schema (filename, json),
+   mọi model phía sau vẫn chạy và cho 0 dòng. #}
+{% macro lake_has_files(suffix) -%}
+{%- if execute -%}
+    {%- set r = run_query("select count(*) from glob(" ~ lake_path(suffix) ~ ")") -%}
+    {{ 'true' if r.columns[0].values()[0] > 0 else 'false' }}
+{%- else -%}true{%- endif -%}
+{%- endmacro %}
+
+{% macro lake_objects(suffix, args='') -%}
+{%- if lake_has_files(suffix) | trim == 'true' -%}
+read_json_objects({{ lake_path(suffix) }}, filename=true{{ ', ' ~ args if args else '' }})
+{%- else -%}
+(select null::varchar as filename, null::json as "json" where false)
+{%- endif -%}
+{%- endmacro %}

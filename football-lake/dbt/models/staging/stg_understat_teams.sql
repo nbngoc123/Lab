@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Body là dict động {"89": {id,title,history}, ...} => json_each() duyệt từng key. #}
 
 with raw as (

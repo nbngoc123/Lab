@@ -1,4 +1,3 @@
-{{ config(materialized='table') }}
 {# p10 tải lại toàn bộ lịch sử từ 2023 mỗi ngày => dedup giữ ingest_date mới nhất cho mỗi (article, lang, ngày).
    'article' giữ nguyên dạng URL-encoded như trong path (vd Brighton_%26_Hove_Albion_F.C.). #}
 

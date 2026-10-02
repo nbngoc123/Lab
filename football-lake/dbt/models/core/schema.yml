@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: int_team_alias
+    description: "alias (chữ thường) -> team_key. unique alias_lower đảm bảo 1 alias không bị gán cho 2 CLB."
+    columns:
+      - name: alias_lower
+        tests: [not_null, unique]
+      - name: team_key
+        tests: [not_null]
+
+  - name: dim_competition
+    description: "Bảng tham chiếu giải đấu + mã của từng nguồn."
+    columns:
+      - name: competition_key
+        tests: [not_null, unique]
+
+  - name: dim_date
+    description: "Lịch ngày 2020-2028, kèm mùa giải (năm bắt đầu mùa)."
+    columns:
+      - name: date_key
+        tests: [not_null, unique]
+
+  - name: dim_venue
+    description: "Sân vận động từ Wikidata, có tọa độ; openmeteo_venue_key khớp thư mục raw/open_meteo."
+    columns:
+      - name: venue_qid
+        tests: [not_null, unique]
+
+  - name: dim_team
+    description: "1 dòng / CLB, khóa team_key theo seed team_alias; gộp thuộc tính + id của mọi nguồn."
+    columns:
+      - name: team_key
+        tests: [not_null, unique]
+
+  - name: dim_player
+    description: "1 dòng / cầu thủ, gộp qua fdo, API-Football, Wikidata, TheSportsDB, Understat."
+    columns:
+      - name: player_key
+        tests: [not_null, unique]
+
+  - name: fact_match
+    description: "1 dòng / trận. Gộp football-data.org, football-data.co.uk, Understat, API-Football, The Odds API, Open-Meteo."
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "home_key <> away_key"
+      - dbt_utils.expression_is_true:
+          name: finished_matches_have_goals
+          expression: "not is_finished or (home_goals is not null and away_goals is not null)"
+      - dbt_utils.expression_is_true:
+          name: sources_agree_on_score
+          expression: "not goals_conflict"
+          config:
+            severity: warn
+    columns:
+      - name: match_key
+        tests: [not_null, unique]
+      - name: competition_key
+        tests: [not_null]
+      - name: match_date
+        tests: [not_null]
+      - name: home_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_team'), field: team_key}
+      - name: away_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_team'), field: team_key}
+      - name: result
+        tests:
+          - accepted_values: {values: ['H', 'D', 'A']}
+
+  - name: fact_team_match
+    description: "1 trận -> 2 dòng (nhà/khách), bảng dài cho rolling form & ML."
+    columns:
+      - name: team_match_key
+        tests: [not_null, unique]
+      - name: team_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_team'), field: team_key}
+      - name: side
+        tests:
+          - accepted_values: {values: ['h', 'a']}
+
+  - name: fact_player_season
+    description: "Chỉ số cầu thủ theo mùa/giải (Understat)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [player_key, competition_key, season, team_key]
+    columns:
+      - name: player_key
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_player'), field: player_key}
+
+  - name: audit_unmapped_team_names
+    description: "Tên đội chưa có trong seed/team_alias.csv (cần bổ sung)."

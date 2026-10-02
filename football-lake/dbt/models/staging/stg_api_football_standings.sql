@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# MỚI: ingest có ghi standings nhưng trước đây chưa có staging. standings là mảng-của-mảng (nhóm -> đội). #}
 
 with raw as (

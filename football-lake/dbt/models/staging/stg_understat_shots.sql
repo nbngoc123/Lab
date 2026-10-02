@@ -1,4 +1,3 @@
-{{ config(materialized='table') }}
 {# Body {"h":[...],"a":[...]}. Path: shots/league=/season=/match_id=/shots.json.gz (không có ingest_date, 1 file/trận). #}
 
 with raw as (

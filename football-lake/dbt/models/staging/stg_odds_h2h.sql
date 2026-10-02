@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 
 select
     match_id, sport_key, home_team, away_team, commence_time,

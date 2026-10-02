@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Glob trúng cả 2 layout: teams/league=X/season=Y/ và teams/season=Y/ (module cũ). Dedup theo (team, season). #}
 
 with raw as (

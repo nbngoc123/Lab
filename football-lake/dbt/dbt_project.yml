@@ -7,7 +7,7 @@ profile: 'football_lake'
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
-seed-paths: ["seeds"]
+seed-paths: ["../seed"]   # Dùng chung seed/team_alias.csv với lake/team_lookup.py
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
@@ -17,17 +17,20 @@ clean-targets:
 
 vars:
   lake_bucket: football-lake
-  # Bật thành 'true' khi đã có code ingest ghi các raw path tương ứng, để tránh dbt lỗi glob rỗng
-  has_fdo_competitions: true
-  has_fdo_teams: true
-  has_fdo_standings: true
-  has_thesportsdb_players: true
+  # non_team_keys: các giá trị không phải tên CLB thật (bộ lọc cho audit)
+  non_team_keys: "('unknown','Bundesliga','La Liga','Ligue 1','Premier League','Serie A','Champions League','European Championship','FIFA World Cup')"
+
+seeds:
+  football_lake:
+    +schema: core
+    team_alias:
+      +column_types: {source: varchar, alias: varchar, team_key: varchar}
 
 models:
   football_lake:
     staging:
       +schema: staging
-      +materialized: view
+      +materialized: external
     core:
       +schema: core
       +materialized: table

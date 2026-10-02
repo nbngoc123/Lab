@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Body lỗi (403/429 bị p09 lưu như data) không có key 'matches' => 0 dòng thay vì vỡ. #}
 
 with raw as (

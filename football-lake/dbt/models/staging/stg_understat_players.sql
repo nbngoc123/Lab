@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 
 with raw as (
     select filename, "json" as doc

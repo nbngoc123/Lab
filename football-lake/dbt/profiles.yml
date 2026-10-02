@@ -13,3 +13,4 @@ football_lake:
         s3_secret_access_key: "{{ env_var('MINIO_SECRET_KEY', 'minioadmin123') }}"
         s3_use_ssl: false
         s3_url_style: path
+      external_root: "s3://football-lake/dwh"
