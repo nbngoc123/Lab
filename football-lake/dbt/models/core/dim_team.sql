@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# 1 dòng / CLB. Khóa = team_key (theo seed team_alias). Tên không có trong seed vẫn có dòng (in_alias_seed=false). #}
 
 with s as (select * from {{ ref('int_team_sightings') }}),

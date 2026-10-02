@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# Bảng tham chiếu giải đấu: mỗi nguồn gọi giải bằng 1 mã khác nhau. Thêm giải mới = thêm 1 dòng. #}
 
 select * from (values

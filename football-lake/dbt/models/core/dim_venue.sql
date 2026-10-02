@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# Sân vận động từ Wikidata (có tọa độ). team_key lấy qua seed (alias nguồn 'openmeteo' = tên sân).
    Lưu ý: 1 sân chung 2 đội (San Siro...) chỉ gán được cho 1 đội theo seed. #}
 

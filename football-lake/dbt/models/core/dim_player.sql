@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# 1 dòng / cầu thủ (đã gộp qua các nguồn). is_matched_across_sources=false nghĩa là chỉ thấy ở 1 nguồn. #}
 
 select

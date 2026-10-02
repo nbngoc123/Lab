@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 
 with d as (
     select unnest(generate_series(date '2020-01-01', date '2028-12-31', interval 1 day))::date as date_key

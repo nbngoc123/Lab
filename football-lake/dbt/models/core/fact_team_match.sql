@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# 1 trận -> 2 dòng (đội nhà, đội khách). Bảng dài, tiện tính rolling form / xG cho ML.
    Bổ sung PPDA, deep, xpts của Understat theo (đội, ngày, sân). #}
 

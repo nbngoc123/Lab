@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# Thống kê cầu thủ theo mùa/giải từ Understat. Grain: player_key + competition_key + season + team_key. #}
 
 with k as (

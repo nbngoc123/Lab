@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+{{ config(materialized='external') }}
 {# 1 dòng / trận ngoài đời thật, gộp 4 nguồn trận đấu + odds + thời tiết.
    Khóa trận = md5(đội nhà | đội khách | ngày) sau khi chuẩn hóa tên đội bằng seed team_alias,
    nên cùng 1 trận ở football-data.org / .co.uk / Understat / API-Football ghép được với nhau.
