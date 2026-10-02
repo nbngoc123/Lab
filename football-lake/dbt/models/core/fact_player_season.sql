@@ -21,3 +21,4 @@ select
 from {{ ref('stg_understat_players') }} p
 join k on k.source_player_id = cast(p.player_id as varchar)
 left join {{ ref('dim_competition') }} c on c.understat_league = p.league
+qualify row_number() over (partition by k.player_key, coalesce(c.competition_key, p.league), p.season, {{ team_key("list_extract(string_split(p.team_name, ','), -1)") }} order by p.minutes_played desc) = 1

@@ -21,7 +21,7 @@ SOURCES = [
     ("p09_football_data_org", football_data_org, "stg_football_data_org_competitions stg_football_data_org_teams stg_football_data_org_players stg_football_data_org_matches stg_football_data_org_standings"),
     ("p10_wikimedia", wikimedia, "stg_wikimedia_pageviews stg_wikimedia_top_daily"),
     ("p13_open_meteo", open_meteo, "stg_open_meteo stg_open_meteo_forecast"),
-    ("p16_physioroom", physioroom, "stg_physioroom"),
+    # ("p16_physioroom", physioroom, "stg_physioroom"),
     ("p19_understat", understat, "stg_understat_matches stg_understat_players stg_understat_shots stg_understat_team_matches stg_understat_teams"),
     ("p20_wikipedia", wikipedia, "stg_wikipedia"),
     ("p20_google_news", google_news, "stg_google_news"),
