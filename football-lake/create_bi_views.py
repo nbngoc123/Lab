@@ -43,7 +43,7 @@ def create_views():
                     else:
                         if table_name.startswith('stg_'):
                             schema_name = 'main_staging'
-                        elif table_name.startswith('int_'):
+                        elif table_name.startswith('int_') or table_name.startswith('dim_') or table_name.startswith('fact_') or table_name.startswith('audit_'):
                             schema_name = 'main_core'
                         else:
                             schema_name = 'main_mart'
