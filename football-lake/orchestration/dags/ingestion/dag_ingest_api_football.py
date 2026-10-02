@@ -3,9 +3,9 @@ from airflow import DAG
 from airflow.decorators import task
 
 from common.assets import (
-    football_fixtures_raw_in, 
-    football_teams_raw_in, 
-    football_players_raw_in
+    api_football_fixtures, 
+    api_football_teams, 
+    api_football_players
 )
 
 default_args = {
@@ -14,6 +14,7 @@ default_args = {
     'email_on_failure': False,
     'retries': 2,
     'retry_delay': timedelta(minutes=5),
+    'pool': 'ingestion_pool',
 }
 
 with DAG(
@@ -32,17 +33,17 @@ with DAG(
         """Lấy danh sách các giải đấu cần fetch dữ liệu."""
         return [39, 140, 135, 78, 61]  # Anh, Tây Ban Nha, Ý, Đức, Pháp
 
-    @task(outlets=[football_teams_raw_in])
+    @task(outlets=[api_football_teams])
     def fetch_teams(league_id: int):
         from pipelines.p24.main import ingest_teams
         return ingest_teams(league_id)
 
-    @task(outlets=[football_fixtures_raw_in])
+    @task(outlets=[api_football_fixtures])
     def fetch_fixtures(league_id: int):
         from pipelines.p24.main import ingest_fixtures
         return ingest_fixtures(league_id)
 
-    @task(outlets=[football_players_raw_in])
+    @task(outlets=[api_football_players])
     def fetch_players(league_id: int):
         from pipelines.p24.main import ingest_players
         return ingest_players(league_id)

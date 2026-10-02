@@ -26,7 +26,7 @@ SOURCES = [
     ("p20_wikipedia", wikipedia, "stg_wikipedia"),
     ("p20_google_news", google_news, "stg_google_news"),
     ("p21_youtube", youtube, "stg_youtube_videos stg_youtube_comments"),
-    ("p22_odds", odds_api, "stg_odds_base stg_odds_h2h stg_odds_spreads stg_odds_totals"),
+    # ("p22_odds", odds_api, "stg_odds_base stg_odds_h2h stg_odds_spreads stg_odds_totals"),
     ("p25_football_news", football_news, "stg_football_news"),
 ]
 
