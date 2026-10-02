@@ -33,7 +33,7 @@ models:
       +materialized: external
     core:
       +schema: core
-      +materialized: table
+      +materialized: external
     mart:
       +schema: mart
-      +materialized: table
+      +materialized: external

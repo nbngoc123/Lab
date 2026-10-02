@@ -30,4 +30,9 @@ with DAG(
         outlets=[dim_team, dim_player, fact_match],
     )
 
-    seed >> core
+    create_bi = BashOperator(
+        task_id="create_bi_views",
+        bash_command="cd /opt/project && python create_bi_views.py",
+    )
+
+    seed >> core >> create_bi
