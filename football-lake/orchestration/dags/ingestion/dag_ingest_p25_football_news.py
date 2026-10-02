@@ -10,6 +10,7 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     schedule='@daily',
     catchup=False,
+    default_args={"pool": "ingestion_pool"},
     tags=["ingestion", "bronze", "football_news"],
 ) as dag:
 
