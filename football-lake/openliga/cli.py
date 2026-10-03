@@ -167,7 +167,7 @@ def _coverage(conn, client, check_scorer=False):
             """)
             db_scorers = cur.fetchall()
         # Map API: {goalGetterId: {name, goals}}
-        api_map = {s["goalGetterID"]: s for s in api_scorers}
+        api_map = {s["goalGetterId"]: s for s in api_scorers}
         print(f"  {'ID':<10} {'Tên':<25} DB_goals  API_goals  Match")
         ok_scorer = True
         for sid, sname, db_g in db_scorers:
