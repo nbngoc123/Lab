@@ -79,3 +79,12 @@ class OpenLigaClient:
 
     def table(self, shortcut, season):
         return self.get(f"/getbltable/{quote(shortcut, safe='')}/{int(season)}")
+
+    def available_teams(self, shortcut, season):
+        return self.get(f"/getavailableteams/{quote(shortcut, safe='')}/{int(season)}")
+
+    def available_groups(self, shortcut, season):
+        return self.get(f"/getavailablegroups/{quote(shortcut, safe='')}/{int(season)}")
+
+    def goal_getters(self, shortcut, season):
+        return self.get(f"/getgoalgetters/{quote(shortcut, safe='')}/{int(season)}")
