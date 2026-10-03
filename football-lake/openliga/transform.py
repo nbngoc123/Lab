@@ -57,8 +57,7 @@ def transform_matches(matches):
             "match_id": mid, "league_id": lid, "group_id": gid,
             "team1_id": _id(t["team1"].get("teamId")) if t["team1"] else None,
             "team2_id": _id(t["team2"].get("teamId")) if t["team2"] else None,
-            "team1_group_name": t["team1"].get("teamGroupName") if t["team1"] else None,
-            "team2_group_name": t["team2"].get("teamGroupName") if t["team2"] else None,
+            # team1_group_name / team2_group_name: khai báo trong swagger nhưng API luôn trả null
             "location_id": loc_id,
             "match_time_utc": parse_dt(m.get("matchDateTimeUTC")),
             "match_time_local": parse_dt(m.get("matchDateTime")),

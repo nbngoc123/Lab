@@ -61,8 +61,7 @@ CREATE TABLE IF NOT EXISTS matches (
   group_id         INT REFERENCES groups,
   team1_id         INT REFERENCES teams,
   team2_id         INT REFERENCES teams,
-  team1_group_name TEXT,                           -- vd "Gruppe A" ở giải đấu loại
-  team2_group_name TEXT,
+  -- team1_group_name / team2_group_name: field khai báo trong swagger nhưng API không bao giờ populate (luôn null)
   location_id      INT REFERENCES locations,
   match_time_utc   TIMESTAMPTZ,
   match_time_local TIMESTAMP,
