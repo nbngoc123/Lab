@@ -33,7 +33,7 @@ models:
     staging:
       +schema: staging
       +materialized: external
-      +external_location: "s3://football-lake/dwh/staging/{{ this.name }}.parquet"
+      +external_location: "s3://football-lake/dwh/staging/{name}.parquet"
     core:
       +schema: core
       +materialized: external
