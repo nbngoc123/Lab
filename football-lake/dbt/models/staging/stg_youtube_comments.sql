@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+
 {# Comment bị tải lại mỗi ngày => giữ bản mới nhất (like_count đổi theo thời gian).
    author_hash: dùng cái này cho phân tích; nếu cần ẩn danh hoàn toàn, bỏ cột author ở đây. #}
 

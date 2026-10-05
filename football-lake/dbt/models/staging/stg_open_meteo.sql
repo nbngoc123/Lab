@@ -1,4 +1,4 @@
-{{ config(materialized='table') }}
+
 {# Bảng vì: ~50k giờ x số sân x số ngày ingest. Dedup giữ bản ingest mới nhất cho mỗi (sân, giờ). #}
 
 with raw as (
