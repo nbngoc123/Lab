@@ -33,6 +33,7 @@ models:
     staging:
       +schema: staging
       +materialized: external
+      +external_location: "s3://{{ var('lake_bucket') }}/dwh/staging/{{ this.name }}.parquet"
     core:
       +schema: core
       +materialized: external
