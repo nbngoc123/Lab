@@ -13,8 +13,8 @@ USER_AGENT = os.getenv("OPENLIGA_USER_AGENT", "football-lake-openliga-sync/1.0")
 # API giới hạn 60 req/phút/IP -> mặc định dùng 50 để chừa biên an toàn
 MAX_REQ_PER_MIN = _int("OPENLIGA_MAX_REQ_PER_MIN", 50)
 
-# Phạm vi mùa giải: 2024 -> hiện tại (season = năm bắt đầu mùa, vd 2025 = 2025/26)
-START_SEASON = _int("OPENLIGA_START_SEASON", 2024)
+# Phạm vi mùa giải: 2021 -> hiện tại (season = năm bắt đầu mùa, vd 2025 = 2025/26)
+START_SEASON = _int("OPENLIGA_START_SEASON", 2021)
 END_SEASON = _int("OPENLIGA_END_SEASON", datetime.now(timezone.utc).year)
 SEASONS = list(range(START_SEASON, END_SEASON + 1))
 # Chỉ các mùa gần nhất mới còn thay đổi -> chỉ reconcile/poll những mùa này
