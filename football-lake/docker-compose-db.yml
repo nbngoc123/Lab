@@ -26,4 +26,8 @@ services:
       - FOOTBALL_PG_USER=postgres
       - FOOTBALL_PG_PASS=postgres
       - FOOTBALL_PG_DB=football_source
+      # Tăng thời gian giãn cách đồng bộ (Lab mode) để đỡ nặng máy
+      - OPENLIGA_TICK_SECONDS=60          # 1 phút mới check việc 1 lần (chuẩn là 30s)
+      - OPENLIGA_LIVE_INTERVAL=300        # Giải đang đá: 5 phút cập nhật 1 lần (chuẩn là 1p)
+      - OPENLIGA_HOT_INTERVAL=3600        # Giải tuần này đá: 1 tiếng cập nhật 1 lần (chuẩn là 5p)
     restart: always
