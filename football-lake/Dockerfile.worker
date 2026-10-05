@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Cài đặt thư viện
+RUN pip install --no-cache-dir requests psycopg2-binary
+
+# Copy code dự án vào container
+COPY openliga/ ./openliga/
+
+# Mặc định chạy worker đồng bộ liên tục
+CMD ["python", "-m", "openliga.cli", "sync"]

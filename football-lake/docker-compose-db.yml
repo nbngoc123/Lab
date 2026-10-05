@@ -12,3 +12,18 @@ services:
       - POSTGRES_DB=football_source
     command: ["postgres", "-c", "wal_level=logical"]
     restart: always
+
+  sync-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: sync-worker
+    depends_on:
+      - postgres-cdc
+    environment:
+      - FOOTBALL_PG_HOST=postgres-cdc
+      - FOOTBALL_PG_PORT=5432
+      - FOOTBALL_PG_USER=postgres
+      - FOOTBALL_PG_PASS=postgres
+      - FOOTBALL_PG_DB=football_source
+    restart: always
