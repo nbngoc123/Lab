@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# p08 ghi: raw/thesportsdb/teams/league=<slug>/ingest_date=<D>/teams.json.gz (trước đây model trỏ sai vào metadata/entity=teams). #}
 
 with raw as (

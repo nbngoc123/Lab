@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# 1 dòng / bàn thắng. scoring_team_id là đội được TÍNH bàn (bàn phản lưới: đội hưởng lợi, không phải đội cầu thủ). #}
 
 select

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Spieltag / Vorrunde / Finale ... #}
 
 select

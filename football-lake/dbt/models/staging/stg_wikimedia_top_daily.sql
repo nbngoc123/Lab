@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# MỚI: p10 có ghi top_daily nhưng chưa có staging. Bao gồm cả trang không liên quan bóng đá (Main_Page...) - lọc ở mart. #}
 
 with raw as (

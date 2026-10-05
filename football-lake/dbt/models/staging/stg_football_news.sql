@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# CHƯA thấy code p25: giả định file là mảng bài báo HOẶC {"articles":[...]}; tên trường theo dạng NewsAPI/GNews.
    Thiếu trường nào => NULL (không vỡ). Kiểm tra lại khi có mẫu raw. #}
 

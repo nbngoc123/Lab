@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Path có fetched_date (không phải ingest_date). Grain: (page_id, language, category). #}
 
 with raw as (

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# 1 dòng / trận (trạng thái hiện tại), đã gắn giải-mùa, tên đội, sân và tỉ số từng loại kết quả.
    Chỉ lấy mùa >= var('openliga_min_season') (mặc định 2024). Đổi: --vars '{openliga_min_season: 2021}'.
    Tên đội/giải là tiếng Đức như API; ánh xạ sang team_key ở tầng core (seed team_alias). #}

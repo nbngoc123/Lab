@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Trạng thái hiện tại của bảng leagues (CDC từ OpenLigaDB). 1 dòng / league_id (mỗi league = 1 giải x 1 mùa). #}
 
 select

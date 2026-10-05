@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Grain: (video_id, search_query) - 1 video có thể lên nhiều query. #}
 
 with raw as (

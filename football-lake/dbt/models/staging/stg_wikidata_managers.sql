@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 
 select distinct
     {{ wd_qid('binding_obj', 'club') }}            as club_qid,

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Mỗi trận có nhiều kết quả theo loại: HalfTime / After90Minutes / AfterExtraTime / AfterPenalties. #}
 
 select

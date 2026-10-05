@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Dự báo 7 ngày (p13 có ghi nhưng trước đây chưa có staging). Giữ bản dự báo mới nhất cho mỗi (sân, giờ). #}
 
 with raw as (

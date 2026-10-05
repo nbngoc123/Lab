@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# MỚI: history trong get_team_data (xG, xGA, PPDA, deep, xpts... theo từng trận) - trước đây bị bỏ. #}
 
 with raw as (

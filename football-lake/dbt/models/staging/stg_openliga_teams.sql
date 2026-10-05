@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 
 select
     {{ jget('a', '$.team_id', 'int') }}  as team_id,

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Thêm league/season từ path (trước đây mất => không phân biệt được mùa). Dedup theo snapshot mới nhất. #}
 
 with raw as (

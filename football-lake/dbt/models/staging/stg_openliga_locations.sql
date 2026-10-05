@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 
 select
     {{ jget('a', '$.location_id', 'int') }}  as location_id,

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# all_varchar + try_cast: ô trống / cột lệch giữa các mùa không làm vỡ model.
    Ngày có 2 định dạng (dd/mm/yy và dd/mm/yyyy). Season lấy từ path. #}
 

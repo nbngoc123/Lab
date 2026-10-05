@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {# Squad nằm trong body teams; bật cùng has_fdo_teams. Giữ competition_code để phân biệt CLB ở PL vs CL. #}
 
 with raw as (
