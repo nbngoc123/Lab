@@ -12,3 +12,4 @@ feedparser
 jeke-understat-scrapper
 
 dbt-duckdb
+confluent-kafka
