@@ -5,19 +5,6 @@ networks:
     external: true
 
 services:
-  postgres-cdc:
-    image: postgres:15
-    container_name: postgres-cdc
-    ports:
-      - "5433:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=testdb
-    command: ["postgres", "-c", "wal_level=logical"]
-    networks:
-      - football-lake_default
-    
   zookeeper-cdc:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper-cdc
@@ -49,7 +36,6 @@ services:
     container_name: debezium
     depends_on:
       - kafka-cdc
-      - postgres-cdc
     ports:
       - "8083:8083"
     environment:
