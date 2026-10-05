@@ -61,6 +61,15 @@ couk as (
     from (select home_team as t from {{ ref('stg_football_data_co_uk') }}
           union select away_team from {{ ref('stg_football_data_co_uk') }})
 ),
+ol as (
+    select distinct 'openliga', 7, cast(t.team_id as varchar), t.team_name, t.short_name, cast(null as varchar),
+           cast(null as integer), cast(null as varchar), cast(null as varchar), cast(null as varchar),
+           cast(null as integer), t.icon_url, cast(null as varchar), cast(null as varchar),
+           cast(null as varchar), cast(null as varchar)
+    from {{ ref('stg_openliga_teams') }} t
+    where t.team_id in (select home_team_id from {{ ref('int_openliga_matches') }}
+                        union select away_team_id from {{ ref('int_openliga_matches') }})
+),
 u as (
     select * from fdo_teams
     union all select * from fdo_match_teams
@@ -70,6 +79,7 @@ u as (
     union all select * from wd
     union all select * from us
     union all select * from couk
+    union all select * from ol
 )
 
 select

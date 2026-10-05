@@ -17,6 +17,8 @@ clean-targets:
 
 vars:
   lake_bucket: football-lake
+  # p26 OpenLigaDB: chỉ lấy mùa >= giá trị này ở staging (worker backfill có thể nạp sâu hơn)
+  openliga_min_season: 2024
   # non_team_keys: các giá trị không phải tên CLB thật (bộ lọc cho audit)
   non_team_keys: "('unknown','Bundesliga','La Liga','Ligue 1','Premier League','Serie A','Champions League','European Championship','FIFA World Cup')"
 

@@ -1,8 +1,8 @@
 {{ config(materialized='external') }}
-{# 1 dòng / trận ngoài đời thật, gộp 4 nguồn trận đấu + odds + thời tiết.
+{# 1 dòng / trận ngoài đời thật, gộp 5 nguồn trận đấu (fdo, co.uk, understat, api_football, openliga) + odds + thời tiết.
    Khóa trận = md5(đội nhà | đội khách | ngày) sau khi chuẩn hóa tên đội bằng seed team_alias,
    nên cùng 1 trận ở football-data.org / .co.uk / Understat / API-Football ghép được với nhau.
-   Ưu tiên giá trị: fdo > co.uk > understat > api_football. #}
+   Ưu tiên giá trị: fdo > co.uk > understat > api_football > openliga. #}
 
 with comp as (select * from {{ ref('dim_competition') }}),
 
@@ -103,6 +103,29 @@ af as (
                                order by kickoff_utc) = 1
 ),
 
+-- ---------- 4b. OpenLigaDB (CDC từ Postgres football_source; có cả trận sắp đá) ----------
+ol_raw as (
+    select
+        cast(o.match_id as varchar)                           as openliga_match_id,
+        coalesce(c.competition_key, upper(o.league_shortcut)) as competition_key,
+        cast(o.match_time_utc as date)                        as match_date,
+        o.match_time_utc                                      as kickoff_utc,
+        {{ team_key('o.home_team') }}                         as home_key,
+        {{ team_key('o.away_team') }}                         as away_key,
+        o.status, o.group_order                               as matchday, o.venue_name,
+        o.home_goals, o.away_goals, o.ht_home_goals, o.ht_away_goals,
+        (o.is_finished and o.home_goals is not null and o.away_goals is not null) as is_finished
+    from {{ ref('int_openliga_matches') }} o
+    left join comp c on c.openliga_shortcut = o.league_shortcut
+),
+ol as (
+    select *, {{ match_key('home_key', 'away_key', 'match_date') }} as match_key,
+           cast(home_goals as varchar) || '-' || cast(away_goals as varchar) as score_str
+    from ol_raw
+    qualify row_number() over (partition by {{ match_key('home_key', 'away_key', 'match_date') }}
+                               order by kickoff_utc) = 1
+),
+
 -- ---------- 5. The Odds API (kèo hiện tại, trung bình qua các nhà cái) ----------
 odds_k as (
     select
@@ -132,6 +155,7 @@ spine as (
         union all select match_key, match_date, home_key, away_key from couk
         union all select match_key, match_date, home_key, away_key from us
         union all select match_key, match_date, home_key, away_key from af
+        union all select match_key, match_date, home_key, away_key from ol
     ) x
     group by match_key
 ),
@@ -145,20 +169,21 @@ wx as (select * from {{ ref('stg_open_meteo') }}),
 base as (
     select
         s.match_key, s.match_date, s.home_key, s.away_key,
-        coalesce(f.competition_key, c.competition_key, u.competition_key, a.competition_key) as competition_key,
-        coalesce(f.kickoff_utc, c.kickoff_utc, a.kickoff_utc)                                as kickoff_utc,
-        f.fdo_match_id, u.understat_match_id, a.af_fixture_id,
-        f.status, f.stage, f.matchday, a.round as af_round,
+        coalesce(f.competition_key, c.competition_key, u.competition_key, a.competition_key, l.competition_key) as competition_key,
+        coalesce(f.kickoff_utc, c.kickoff_utc, a.kickoff_utc, l.kickoff_utc)                 as kickoff_utc,
+        f.fdo_match_id, u.understat_match_id, a.af_fixture_id, l.openliga_match_id,
+        coalesce(f.status, l.status) as status, f.stage, coalesce(f.matchday, l.matchday) as matchday, a.round as af_round,
         coalesce(f.referee, c.referee, a.referee)    as referee,
-        a.venue_name,
+        coalesce(a.venue_name, l.venue_name) as venue_name,
         (coalesce(f.is_finished, false) or (c.home_goals is not null)
          or coalesce(u.is_result, false)
-         or coalesce(a.status_short in ('FT', 'AET', 'PEN'), false))             as is_finished,
-        coalesce(f.home_goals, c.home_goals, u.home_goals, a.home_goals)         as home_goals_any,
-        coalesce(f.away_goals, c.away_goals, u.away_goals, a.away_goals)         as away_goals_any,
-        coalesce(f.ht_home_goals, c.ht_home_goals) as ht_home_goals,
-        coalesce(f.ht_away_goals, c.ht_away_goals) as ht_away_goals,
-        (select count(distinct v) from (values (f.score_str), (c.score_str), (u.score_str), (a.score_str)) t(v)
+         or coalesce(a.status_short in ('FT', 'AET', 'PEN'), false)
+         or coalesce(l.is_finished, false))                                      as is_finished,
+        coalesce(f.home_goals, c.home_goals, u.home_goals, a.home_goals, l.home_goals) as home_goals_any,
+        coalesce(f.away_goals, c.away_goals, u.away_goals, a.away_goals, l.away_goals) as away_goals_any,
+        coalesce(f.ht_home_goals, c.ht_home_goals, l.ht_home_goals) as ht_home_goals,
+        coalesce(f.ht_away_goals, c.ht_away_goals, l.ht_away_goals) as ht_away_goals,
+        (select count(distinct v) from (values (f.score_str), (c.score_str), (u.score_str), (a.score_str), (l.score_str)) t(v)
          where v is not null)                                                    as n_distinct_scores,
         -- thống kê trận (co.uk)
         c.home_shots, c.away_shots, c.home_shots_target, c.away_shots_target,
@@ -173,12 +198,14 @@ base as (
         o.odds_api_home, o.odds_api_draw, o.odds_api_away, o.odds_api_n_bookmakers, o.odds_api_updated_at,
         (f.match_key is not null) as in_fdo, (c.match_key is not null) as in_couk,
         (u.match_key is not null) as in_understat, (a.match_key is not null) as in_api_football,
+        (l.match_key is not null) as in_openliga,
         (o.match_key is not null) as in_odds_api
     from spine s
     left join fdo  f on f.match_key = s.match_key
     left join couk c on c.match_key = s.match_key
     left join us   u on u.match_key = s.match_key
     left join af   a on a.match_key = s.match_key
+    left join ol   l on l.match_key = s.match_key
     left join odds o on o.match_key = s.match_key
 ),
 
@@ -199,7 +226,7 @@ select
     w.match_date,
     w.kickoff_utc,
     w.home_key, w.away_key,
-    w.fdo_match_id, w.understat_match_id, w.af_fixture_id,
+    w.fdo_match_id, w.understat_match_id, w.af_fixture_id, w.openliga_match_id,
     w.status, w.stage, w.matchday, w.af_round, w.referee, w.venue_name,
     w.is_finished,
     case when w.is_finished then w.home_goals_any end                     as home_goals,
@@ -223,7 +250,7 @@ select
     x.windspeed_kmh   as weather_wind_kmh,
     x.humidity_pct    as weather_humidity_pct,
     x.weather_code    as weather_code,
-    w.in_fdo, w.in_couk, w.in_understat, w.in_api_football, w.in_odds_api,
+    w.in_fdo, w.in_couk, w.in_understat, w.in_api_football, w.in_openliga, w.in_odds_api,
     (x.venue_name is not null)                                            as has_weather
 from with_wx w
 left join wx x on x.venue_name = w.openmeteo_venue_key and x.weather_time = w.kickoff_local_hour

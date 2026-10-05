@@ -24,7 +24,8 @@ LIVE_SEASONS = SEASONS[-max(1, _int("OPENLIGA_LIVE_SEASONS", 2)):]
 PG_HOST = os.getenv("FOOTBALL_PG_HOST", "localhost")
 PG_PORT = _int("FOOTBALL_PG_PORT", 5433)          # postgres-cdc map ra 5433
 PG_USER = os.getenv("FOOTBALL_PG_USER", "postgres")
-PG_PASSWORD = os.getenv("FOOTBALL_PG_PASSWORD", "postgres")
+# docker-compose-db.yml đang truyền FOOTBALL_PG_PASS -> chấp nhận cả hai tên biến
+PG_PASSWORD = os.getenv("FOOTBALL_PG_PASSWORD", os.getenv("FOOTBALL_PG_PASS", "postgres"))
 PG_DB = os.getenv("FOOTBALL_PG_DB", "football_source")
 
 RAW_LOG = os.getenv("OPENLIGA_RAW_LOG", "0") == "1"

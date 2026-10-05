@@ -6,7 +6,7 @@ from common.assets import (
     football_data_co_uk, wikidata, thesportsdb, football_data_org, 
     wikimedia, open_meteo, physioroom, understat, wikipedia, 
     google_news, youtube, odds_api, football_news,
-    api_football_fixtures, api_football_teams, api_football_players
+    api_football_fixtures, api_football_teams, api_football_players, openliga
 )
 
 # ==============================================================================
@@ -28,6 +28,7 @@ SOURCES = [
     ("p21_youtube", youtube, "stg_youtube_videos stg_youtube_comments"),
     # ("p22_odds", odds_api, "stg_odds_base stg_odds_h2h stg_odds_spreads stg_odds_totals"),
     ("p25_football_news", football_news, "stg_football_news"),
+    ("p26_openliga", openliga, "stg_openliga_leagues stg_openliga_teams stg_openliga_groups stg_openliga_locations stg_openliga_match_results stg_openliga_matches stg_openliga_goals"),
 ]
 
 for source_name, in_asset, dbt_models in SOURCES:

@@ -29,6 +29,9 @@ wikidata = Asset("minio://football-lake/raw/wikidata")
 wikipedia = Asset("minio://football-lake/raw/wikipedia")
 odds_api = Asset("minio://football-lake/raw/odds")
 
+# OpenLigaDB (CDC từ Postgres football_source qua Debezium/Kafka)
+openliga = Asset("minio://football-lake/raw/openliga")
+
 # ==========================================
 # STAGING ASSETS (dbt - DuckDB)
 # ==========================================

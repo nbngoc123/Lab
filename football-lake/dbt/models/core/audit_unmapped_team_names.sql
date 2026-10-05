@@ -16,6 +16,8 @@ with names as (
     union all select 'fdo_teams', name from {{ ref('stg_football_data_org_teams') }}
     union all select 'thesportsdb', team_name from {{ ref('stg_thesportsdb_teams') }}
     union all select 'wikidata', club_name from {{ ref('stg_wikidata_clubs') }}
+    union all select 'openliga', home_team from {{ ref('int_openliga_matches') }}
+    union all select 'openliga', away_team from {{ ref('int_openliga_matches') }}
 )
 select source, raw_name, count(*) as n_rows
 from names
