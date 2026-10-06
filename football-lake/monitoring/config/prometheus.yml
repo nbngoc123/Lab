@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Cấu hình sẵn cho Airflow StatsD Exporter (Nếu sau này bạn gắn vào Airflow)
+  #- job_name: 'airflow'
+  #  static_configs:
+  #    - targets: ['airflow-statsd:9102']

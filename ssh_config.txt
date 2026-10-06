@@ -15,6 +15,8 @@ Host vm
     LocalForward 15672 localhost:15672
     LocalForward 8088 localhost:8088
     LocalForward 8081 localhost:8081
+    LocalForward 9090 localhost:9090
+    LocalForward 9999 localhost:9999
     ServerAliveInterval 60
     ServerAliveCountMax 3
     StrictHostKeyChecking no
