@@ -19,6 +19,8 @@ x-airflow-common:
     MINIO_SECRET_KEY: minioadmin123
     MINIO_BUCKET: football-lake
     PYTHONPATH: /opt/project
+    DBT_TARGET_PATH: /tmp/dbt/target
+    DBT_LOG_PATH: /tmp/dbt/logs
   volumes: &id003
   - ./orchestration/dags:/opt/airflow/dags
   - .:/opt/project

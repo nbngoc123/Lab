@@ -11,6 +11,9 @@ seed-paths: ["../seed"]   # Dùng chung seed/team_alias.csv với lake/team_look
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
+target-path: "{{ env_var('DBT_TARGET_PATH', 'target') }}"
+log-path: "{{ env_var('DBT_LOG_PATH', 'logs') }}"
+
 clean-targets:
   - "target"
   - "dbt_packages"
