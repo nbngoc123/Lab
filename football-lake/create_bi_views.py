@@ -39,7 +39,8 @@ def create_views():
                 table_name = parts[-1].replace('.parquet', '')
                 if table_name:
                     if len(parts) >= 3:
-                        schema_name = parts[-2]
+                        # dwh/staging/x.parquet -> schema main_staging (giữ tên cũ để dashboard Superset không vỡ)
+                        schema_name = f"main_{parts[-2]}" if parts[-2] in ("staging", "core", "mart") else parts[-2]
                     else:
                         if table_name.startswith('stg_'):
                             schema_name = 'main_staging'
@@ -47,6 +48,8 @@ def create_views():
                             schema_name = 'main_core'
                         else:
                             schema_name = 'main_mart'
+                    if (schema_name, table_name) in tables and len(parts) < 3:
+                        continue   # file phẳng cũ (dwh/stg_x.parquet) không được đè bản ở dwh/staging/
                     tables[(schema_name, table_name)] = f"s3://{bucket}/{key}"
                 
     if not tables:

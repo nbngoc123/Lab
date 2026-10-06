@@ -3,11 +3,17 @@ football_lake:
   outputs:
     dev:
       type: duckdb
-      path: "{{ env_var('DBT_DUCKDB_PATH', 'football_lake.duckdb') }}"
+      # ':memory:' => KHÔNG có file .duckdb dùng chung => không khoá giữa các DAG chạy song song, không dính
+      # quyền ghi trên bind-mount. Mọi kết quả đã nằm ở MinIO (external). Cần debug cục bộ: DBT_DUCKDB_PATH=dev.duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', ':memory:') }}"
       threads: 4
       extensions:
         - httpfs
       settings:
+        # Nhiều dbt chạy song song, mỗi tiến trình 1 DuckDB riêng: mặc định DuckDB đòi tới 80% RAM/tiến trình => dễ OOM.
+        memory_limit: "{{ env_var('DBT_DUCKDB_MEMORY_LIMIT', '2GB') }}"
+        # Khi tràn RAM DuckDB ghi file tạm; mặc định là ./.tmp (nằm trong bind-mount => Permission denied)
+        temp_directory: "{{ env_var('DBT_DUCKDB_TEMP_DIR', '/tmp/duckdb_tmp') }}"
         s3_endpoint: "{{ env_var('MINIO_ENDPOINT', 'localhost:9000') | replace('http://', '') }}"
         s3_access_key_id: "{{ env_var('MINIO_ACCESS_KEY', 'minioadmin') }}"
         s3_secret_access_key: "{{ env_var('MINIO_SECRET_KEY', 'minioadmin123') }}"

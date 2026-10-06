@@ -162,8 +162,31 @@ def make_consumer():
     return c
 
 
+def preflight(consumer, timeout=15):
+    """Kiểm tra Kafka sống và topic CDC đã tồn tại, để lỗi hạ tầng báo RÕ thay vì im lặng/mơ hồ.
+    Trả về danh sách topic còn thiếu (chỉ cảnh báo khi thiếu một phần)."""
+    try:
+        md = consumer.list_topics(timeout=timeout)
+    except Exception as e:
+        raise RuntimeError(f"Không kết nối được Kafka tại '{BOOTSTRAP}' ({e}). "
+                           "Kiểm tra container kafka-cdc đang chạy và cùng network với Airflow.") from e
+    missing = [t for t in topics() if t not in md.topics]
+    if len(missing) == len(topics()):
+        raise RuntimeError(f"Kafka chạy nhưng chưa có topic nào dạng '{TOPIC_PREFIX}*'. Debezium connector đã đăng ký "
+                           "và snapshot xong chưa? (python -m openliga.cli register; kiểm tra :8083/connectors)")
+    if missing:
+        print(f"[p26] cảnh báo: thiếu topic {missing}")
+    return missing
+
+
 def ingest() -> dict:
     """Entry point cho Airflow."""
-    stats = consume_and_store(make_consumer())
+    consumer = make_consumer()
+    try:
+        preflight(consumer)
+    except RuntimeError:
+        consumer.close()
+        raise
+    stats = consume_and_store(consumer)
     print(f"[p26] {stats['events']} sự kiện, {stats['files']} file, {stats['bad']} lỗi parse -> {stats['by_table']}")
     return stats

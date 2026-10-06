@@ -14,6 +14,11 @@ snapshot-paths: ["snapshots"]
 target-path: "{{ env_var('DBT_TARGET_PATH', 'target') }}"
 log-path: "{{ env_var('DBT_LOG_PATH', 'logs') }}"
 
+# Mỗi lần chạy dbt dùng DuckDB TRONG BỘ NHỌ (xem profiles.yml). Model nào KHÔNG nằm trong lần chạy này mà là upstream
+# kiểu `external` (vd core đọc staging) sẽ được đăng ký thành view trỏ thẳng vào file Parquet trên MinIO.
+on-run-start:
+  - "{{ register_upstream_external_models() }}"
+
 clean-targets:
   - "target"
   - "dbt_packages"
@@ -36,7 +41,6 @@ models:
     staging:
       +schema: staging
       +materialized: external
-      +external_location: "s3://football-lake/dwh/staging/{name}.parquet"
     core:
       +schema: core
       +materialized: external

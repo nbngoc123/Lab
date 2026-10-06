@@ -9,6 +9,12 @@ from common.assets import (
     api_football_fixtures, api_football_teams, api_football_players, openliga
 )
 
+def dbt_env(dag_id: str) -> dict:
+    """Mỗi DAG có target/log riêng ở /tmp (không ghi vào bind-mount của host => không Permission denied,
+    và các DAG chạy song song không đạp lên manifest/partial_parse của nhau)."""
+    return {"DBT_TARGET_PATH": f"/tmp/dbt/{dag_id}/target", "DBT_LOG_PATH": f"/tmp/dbt/{dag_id}/logs"}
+
+
 # ==============================================================================
 # TẠO DAG ĐỘNG (DYNAMIC DAGs) CHO TỪNG NGUỒN ĐỘC LẬP
 # Mỗi DAG chỉ kích hoạt khi MinIO Asset tương ứng của nó có dữ liệu mới.
@@ -43,6 +49,7 @@ for source_name, in_asset, dbt_models in SOURCES:
         schedule=[in_asset],
         start_date=datetime(2023, 1, 1),
         catchup=False,
+        max_active_runs=1,   # 1 nguồn không chạy chồng chính nó
         tags=["transformation", "dbt", "staging", "duckdb", source_name],
     )
     
@@ -50,7 +57,8 @@ for source_name, in_asset, dbt_models in SOURCES:
         # Chạy dbt CHỈ CHO CÁC BẢNG STAGING CỦA NGUỒN NÀY
         BashOperator(
             task_id=f"dbt_run_{source_name}",
-            bash_command=f"cd /opt/project/dbt && dbt build --select {dbt_models} --profiles-dir ."
+            bash_command=f"cd /opt/project/dbt && dbt build --select {dbt_models} --profiles-dir .",
+            env=dbt_env(dag_id), append_env=True,
         )
         
     # Đăng ký DAG vào Global scope của Airflow
@@ -66,13 +74,38 @@ dag_p24 = DAG(
     schedule=(api_football_fixtures & api_football_teams & api_football_players),
     start_date=datetime(2023, 1, 1),
     catchup=False,
+    max_active_runs=1,
     tags=["transformation", "dbt", "staging", "duckdb", "p24_api_football"],
 )
 
 with dag_p24:
     BashOperator(
         task_id="dbt_run_p24_api_football",
-        bash_command="cd /opt/project/dbt && dbt build --select stg_fixtures stg_teams stg_players stg_api_football_standings --profiles-dir ."
+        bash_command="cd /opt/project/dbt && dbt build --select stg_fixtures stg_teams stg_players stg_api_football_standings --profiles-dir .",
+        env=dbt_env("dag_dbt_staging_p24_api_football"), append_env=True,
     )
 
 globals()["dag_dbt_staging_p24_api_football"] = dag_p24
+
+
+# ==============================================================================
+# BOOTSTRAP / LÀM MỚI TOÀN BỘ STAGING (chạy tay): dựng mọi file Parquet ở dwh/staging/ trong 1 lần.
+# Cần chạy 1 lần trước dag_dbt_core (core đọc staging từ Parquet, không tự dựng lại staging).
+# ==============================================================================
+dag_all = DAG(
+    dag_id="dag_dbt_staging_all",
+    schedule=None,
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+    max_active_runs=1,
+    tags=["transformation", "dbt", "staging", "duckdb", "manual"],
+)
+
+with dag_all:
+    BashOperator(
+        task_id="dbt_build_all_staging",
+        bash_command="cd /opt/project/dbt && dbt build --select path:models/staging --profiles-dir .",
+        env=dbt_env("dag_dbt_staging_all"), append_env=True,
+    )
+
+globals()["dag_dbt_staging_all"] = dag_all

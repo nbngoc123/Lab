@@ -76,3 +76,31 @@ def test_bad_message_goes_to_dead_letter_and_does_not_block():
 def test_no_messages_means_no_files_and_no_commit():
     st, out, c = run([])
     assert st["events"] == 0 and out == [] and c.commits == 0
+
+
+class Meta:
+    def __init__(self, names): self.topics = {n: object() for n in names}
+
+
+class MetaConsumer:
+    def __init__(self, names=None, boom=None): self.names, self.boom = names or [], boom
+    def list_topics(self, timeout=0):
+        if self.boom: raise self.boom
+        return Meta(self.names)
+
+
+def test_preflight_kafka_down_gives_clear_message():
+    import pytest
+    with pytest.raises(RuntimeError, match="Không kết nối được Kafka"):
+        p26.preflight(MetaConsumer(boom=Exception("timed out")))
+
+
+def test_preflight_no_topics_means_connector_missing():
+    import pytest
+    with pytest.raises(RuntimeError, match="chưa có topic nào"):
+        p26.preflight(MetaConsumer(names=["__consumer_offsets"]))
+
+
+def test_preflight_partial_topics_only_warns():
+    assert p26.preflight(MetaConsumer(names=p26.topics()[:-1])) == [p26.topics()[-1]]
+    assert p26.preflight(MetaConsumer(names=p26.topics())) == []
