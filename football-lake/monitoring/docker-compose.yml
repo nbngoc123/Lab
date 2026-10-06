@@ -105,5 +105,5 @@ volumes:
 
 networks:
   mds_network:
-    name: football-lake_mds_network
+    name: football-lake_default
     external: true
