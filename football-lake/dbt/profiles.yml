@@ -3,7 +3,7 @@ football_lake:
   outputs:
     dev:
       type: duckdb
-      path: 'football_lake.duckdb'
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'football_lake.duckdb') }}"
       threads: 4
       extensions:
         - httpfs

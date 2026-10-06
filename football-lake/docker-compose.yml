@@ -21,6 +21,7 @@ x-airflow-common:
     PYTHONPATH: /opt/project
     DBT_TARGET_PATH: /tmp/dbt/target
     DBT_LOG_PATH: /tmp/dbt/logs
+    DBT_DUCKDB_PATH: /tmp/dbt/football_lake.duckdb
   volumes: &id003
   - ./orchestration/dags:/opt/airflow/dags
   - .:/opt/project
