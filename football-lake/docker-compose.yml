@@ -22,6 +22,10 @@ x-airflow-common:
     DBT_TARGET_PATH: /tmp/dbt/target
     DBT_LOG_PATH: /tmp/dbt/logs
     DBT_DUCKDB_PATH: ":memory:"
+    AIRFLOW__METRICS__STATSD_ON: 'true'
+    AIRFLOW__METRICS__STATSD_HOST: 'statsd-exporter'
+    AIRFLOW__METRICS__STATSD_PORT: 9125
+    AIRFLOW__METRICS__STATSD_PREFIX: 'airflow'
   volumes: &id003
   - ./orchestration/dags:/opt/airflow/dags
   - .:/opt/project

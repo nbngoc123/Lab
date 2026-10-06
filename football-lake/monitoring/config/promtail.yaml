@@ -21,3 +21,22 @@ scrape_configs:
         target_label: 'logstream'
       - source_labels: ['__meta_docker_image_name']
         target_label: 'image'
+
+  - job_name: airflow_task_logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: airflow_task_logs
+          __path__: /opt/airflow/logs/*/*/*/*.log
+          __path_exclude__: /opt/airflow/logs/scheduler/**/*.log
+    pipeline_stages:
+      - match:
+          selector: '{job="airflow_task_logs"}'
+          stages:
+            - regex:
+                expression: '/opt/airflow/logs/(?P<dag_id>[^/]+)/(?P<task_id>[^/]+)/.*'
+                source: filename
+            - labels:
+                dag_id:
+                task_id:

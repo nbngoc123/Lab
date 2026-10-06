@@ -35,6 +35,7 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config/promtail.yaml:/etc/promtail/config.yml
+      - ../logs:/opt/airflow/logs:ro
     command: -config.file=/etc/promtail/config.yml
     restart: unless-stopped
     networks:
@@ -69,6 +70,30 @@ services:
       - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks:
+      - mds_network
+
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: statsd-exporter
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+    restart: unless-stopped
+    networks:
+      - mds_network
+
+  lake-exporter:
+    build: ./lake-exporter
+    container_name: lake-exporter
+    ports:
+      - "9108:9108"
+    environment:
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - DEBEZIUM_URL=http://debezium:8083
     restart: unless-stopped
     networks:
       - mds_network

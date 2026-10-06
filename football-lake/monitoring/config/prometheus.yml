@@ -10,7 +10,10 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']
 
-  # Cấu hình sẵn cho Airflow StatsD Exporter (Nếu sau này bạn gắn vào Airflow)
-  #- job_name: 'airflow'
-  #  static_configs:
-  #    - targets: ['airflow-statsd:9102']
+  - job_name: 'airflow'
+    static_configs:
+      - targets: ['statsd-exporter:9102']
+
+  - job_name: 'lake-exporter'
+    static_configs:
+      - targets: ['lake-exporter:9108']
