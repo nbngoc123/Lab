@@ -12,6 +12,11 @@ services:
       - POSTGRES_DB=football_source
     command: ["postgres", "-c", "wal_level=logical"]
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d football_source"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   sync-worker:
     build:
@@ -19,7 +24,8 @@ services:
       dockerfile: Dockerfile.worker
     container_name: sync-worker
     depends_on:
-      - postgres-cdc
+      postgres-cdc:
+        condition: service_healthy
     environment:
       - FOOTBALL_PG_HOST=postgres-cdc
       - FOOTBALL_PG_PORT=5432
