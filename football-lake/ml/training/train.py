@@ -33,41 +33,47 @@ def load_data_from_lake():
         );
     """)
     
-    print("[2/5] Đang tải dữ liệu feature_match_ml từ tầng Gold...")
+    path = os.getenv('ML_FEATURES_PATH', 's3://football-lake/dwh/mart_ml_match_features.parquet')
+    print(f"[2/5] Đang tải bảng đặc trưng từ mart: {path}")
     try:
-        df = con.execute("SELECT * FROM read_parquet('s3://football-lake/gold-features/gold/features/feature_match_ml.parquet')").df()
+        df = con.execute(f"SELECT * FROM read_parquet('{path}')").df()
         print(f"  -> Tải thành công {len(df):,} dòng.")
         return df
     except Exception as e:
         print(f"[!] Lỗi khi tải dữ liệu: {e}")
         exit(1)
 
+def select_features(df):
+    """Đặc trưng = cột SỐ bắt đầu bằng 'f_' (mart_ml_match_features đảm bảo f_* chỉ dùng thông tin trước giờ đá).
+    KHÔNG chọn theo kiểu "mọi cột trừ khoá": một cột metadata/hậu-trận lọt vào sẽ âm thầm thành đặc trưng (rò rỉ nhãn).
+    ML_DROP_PREFIXES="f_mkt_" để huấn luyện mô hình thuần phong độ, không dùng tỉ lệ cược."""
+    drop = tuple(p.strip() for p in os.getenv('ML_DROP_PREFIXES', '').split(',') if p.strip())
+    feats = [c for c in df.columns
+             if c.startswith('f_') and pd.api.types.is_numeric_dtype(df[c]) and not (drop and c.startswith(drop))]
+    bad = [c for c in feats if c.startswith('y_')]
+    assert not bad, f"đặc trưng chứa cột nhãn: {bad}"
+    return feats
+
+
 def preprocess_data(df):
     print("[3/5] Tiền xử lý dữ liệu...")
-    # Chỉ lấy các trận đã đủ số liệu (is_warm = 1)
-    df = df[df['is_warm'] == 1].copy()
-    
-    # Định nghĩa các cột không dùng làm Feature
-    keys_cols = ['match_id', 'division', 'season', 'match_date', 'home_key', 'away_key', 'home_team', 'away_team', 'split', 'is_warm']
-    target_cols = ['target', 'target_home_goals', 'target_away_goals', 'target_total_goals', 'target_over25', 'target_btts']
-    
-    # Chuyển đổi nhãn (Target Encoding): Thua (Away win)=0, Hòa=1, Thắng (Home win)=2
-    target_mapping = {'A': 0, 'D': 1, 'H': 2}
-    df['target_encoded'] = df['target'].map(target_mapping)
-    
-    # Tạo danh sách các cột Feature (Tất cả cột ngoại trừ keys, targets và cột rác)
-    features = [c for c in df.columns if c not in keys_cols + target_cols + ['target_encoded']]
-    
-    # Chia tập Train / Valid / Test dựa trên cột 'split' do build_features đã tạo ra (chia theo thời gian)
+    # Chỉ lấy trận đã có nhãn và đủ lịch sử (is_warm); trận 'predict' (chưa đá) dùng cho suy luận, không huấn luyện
+    df = df[df['is_warm'].astype(bool) & df['is_labeled'].astype(bool)].copy()
+
+    # Nhãn: Away win=0, Draw=1, Home win=2 (đã mã hoá sẵn trong mart)
+    df['target_encoded'] = df['y_result_code'].astype(int)
+    features = select_features(df)
+
+    # Chia Train / Valid / Test theo cột 'split' do mart tạo (chia THEO THỜI GIAN, không ngẫu nhiên)
     train_df = df[df['split'] == 'train']
     valid_df = df[df['split'] == 'valid']
     test_df = df[df['split'] == 'test']
-    
+
     print(f"  -> Tập Train: {len(train_df)} trận")
     print(f"  -> Tập Valid: {len(valid_df)} trận")
     print(f"  -> Tập Test:  {len(test_df)} trận")
     print(f"  -> Số lượng Features: {len(features)}")
-    
+
     return train_df, valid_df, test_df, features
 
 def train_xgboost(train_df, valid_df, features):
@@ -86,6 +92,7 @@ def train_xgboost(train_df, valid_df, features):
         'subsample': 0.8,
         'colsample_bytree': 0.8,
         'n_estimators': 500,
+        'early_stopping_rounds': 30,   # dừng khi log-loss tập valid không cải thiện 30 vòng (tránh overfit: không có thì 500 cây xấu đi sau ~100)
         'random_state': 42
     }
     
@@ -94,7 +101,7 @@ def train_xgboost(train_df, valid_df, features):
     # Huấn luyện mô hình và sử dụng Early Stopping
     model.fit(
         X_train, y_train,
-        eval_set=[(X_train, y_train), (X_valid, y_valid)],
+        eval_set=[(X_valid, y_valid)],   # early stopping dùng eval_set cuối => chỉ tập valid
         verbose=50
     )
     

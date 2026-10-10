@@ -19,3 +19,13 @@
    không có tác dụng trong dbt-duckdb. Staging -> `dwh/staging/`, core giữ `dwh/` như cũ.
 6. Staging của nguồn chưa có dữ liệu có đúng 1 dòng giữ chỗ toàn NULL (hành vi của materialization `external`).
    Core không bị ảnh hưởng; nếu đọc staging trực tiếp (ML/BI) hãy lọc `where <khoá> is not null`.
+
+## Mart ML (`dbt/models/mart`, DAG `dag_dbt_mart_ml`)
+- Đọc **core** (fact_match, fact_team_match, dim_*, fact_goal, fact_player_season) và **staging** (pageviews, text, understat shots).
+- Quy ước cột: `f_*` = đặc trưng chỉ dùng thông tin trước giờ đá, `y_*` = nhãn/số liệu sau trận. Huấn luyện chỉ lấy `f_*` (xem `ml/training/train.py`).
+- Bảng chính `mart_ml_match_features`; bảng phụ `mart_ml_match_attention` (lượt xem Wikipedia, join theo match_key);
+  kho văn bản `mart_ml_text_docs` **độc lập** (không nối đội/trận, dùng cho NLP); `mart_ml_goals`, `mart_ml_shots`, `mart_ml_player_season_features`.
+- Test `assert_ml_no_label_leakage` chặn rò rỉ: đặc trưng nào tương quan > 0.55 với hiệu số bàn thắng thì build FAIL
+  (đã bắt được cột forecast Understat thực chất tính từ xG của chính trận: tương quan 0.64).
+- Độ phủ đo trên dữ liệu thật: odds chỉ 6 giải lớn + Championship; xG chỉ giải Understat; thời tiết chỉ EPL/Championship;
+  ~9.000 trận OpenLiga (BL2/BL3/giải khu vực) chỉ có đặc trưng phong độ. Đặc trưng NULL = nguồn không phủ, không phải 0.

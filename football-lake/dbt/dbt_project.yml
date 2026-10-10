@@ -28,6 +28,11 @@ vars:
   # p26 OpenLigaDB: chỉ lấy mùa >= giá trị này ở staging (worker backfill có thể nạp sâu hơn)
   openliga_min_season: 2024
   # non_team_keys: các giá trị không phải tên CLB thật (bộ lọc cho audit)
+  # Mart ML ---------------------------------------------------------------------------------------------
+  ml_min_match_date: '2000-01-01'   # bỏ trận có ngày placeholder (OpenLigaDB có giải rác với ngày 1970-01-01)
+  ml_min_history: 5          # is_warm: cả 2 đội cần >= N trận trước đó
+  ml_train_until: 0.70       # chia theo thời gian trên các trận đã có nhãn: <0.70 train, <0.85 valid, còn lại test
+  ml_valid_until: 0.85
   non_team_keys: "('unknown','Bundesliga','La Liga','Ligue 1','Premier League','Serie A','Champions League','European Championship','FIFA World Cup')"
 
 seeds:

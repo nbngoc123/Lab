@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: mart_ml_match_features
+    description: "ML mart chính: 1 dòng / trận. f_* = đặc trưng trước giờ đá, y_* = nhãn sau trận. Chia split theo thời gian."
+    columns:
+      - name: match_key
+        tests: [not_null, unique]
+      - name: split
+        tests:
+          - not_null
+          - accepted_values: {values: ['train', 'valid', 'test', 'predict']}
+      - name: y_result
+        tests:
+          - accepted_values: {values: ['H', 'D', 'A']}
+  - name: mart_ml_team_match_features
+    description: "Bảng dài: 1 trận -> 2 dòng, phong độ đội tính đúng thời điểm trước trận (ASOF join)."
+    columns:
+      - name: team_match_key
+        tests: [not_null, unique]
+  - name: mart_ml_match_attention
+    description: "Bảng PHỤ (join tuỳ chọn): lượt xem Wikipedia 7/28 ngày trước trận; chỉ trận mà ít nhất 1 đội có dữ liệu."
+    columns:
+      - name: match_key
+        tests: [not_null, unique]
+  - name: mart_ml_text_docs
+    description: "Kho văn bản độc lập cho NLP (tin tức, YouTube, bình luận, Wikipedia). KHÔNG nối vào đội/trận."
+    columns:
+      - name: doc_id
+        tests: [not_null, unique]
+  - name: mart_ml_goals
+    columns:
+      - name: goal_id
+        tests: [not_null, unique]
+  - name: mart_ml_shots
+    columns:
+      - name: shot_id
+        tests: [not_null, unique]
