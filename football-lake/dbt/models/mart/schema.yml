@@ -23,11 +23,31 @@ models:
     columns:
       - name: match_key
         tests: [not_null, unique]
-  - name: mart_ml_text_docs
-    description: "Kho văn bản độc lập cho NLP (tin tức, YouTube, bình luận, Wikipedia). KHÔNG nối vào đội/trận."
+  - name: mart_ml_text_google_news
+    description: "TEXT ML tách riêng (không nối đội/trận): Google News, 1 dòng / bài."
     columns:
-      - name: doc_id
+      - name: news_id
         tests: [not_null, unique]
+  - name: mart_ml_text_football_news
+    description: "TEXT ML tách riêng: football_news, 1 dòng / bài (md5(url))."
+    columns:
+      - name: news_id
+        tests: [not_null, unique]
+  - name: mart_ml_text_youtube_videos
+    description: "TEXT ML tách riêng: video YouTube, kèm thống kê bình luận theo video_id."
+    columns:
+      - name: video_id
+        tests: [not_null, unique]
+  - name: mart_ml_text_youtube_comments
+    description: "TEXT ML tách riêng: bình luận YouTube kèm ngữ cảnh video cha."
+    columns:
+      - name: comment_id
+        tests: [not_null, unique]
+  - name: mart_ml_text_wikipedia
+    description: "TEXT ML tách riêng: bài Wikipedia (nội dung dài)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [page_id, language, category]
   - name: mart_ml_goals
     columns:
       - name: goal_id

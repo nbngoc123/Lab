@@ -259,18 +259,26 @@ def test_team_attention_maps_p10_article_names(runs):
 # --------------------------------------------------------------------------------------------------------------
 # văn bản
 # --------------------------------------------------------------------------------------------------------------
-def test_text_docs_are_standalone_no_team_linking(runs):
-    d = df(runs["base"], "select * from '{dwh}/mart_ml_text_docs.parquet'")
-    assert not [c for c in d.columns if "team" in c or "mention" in c], "văn bản không được nối đội"
-    assert set(d.doc_type) == {"news", "video", "comment", "wiki_article"} and d.doc_id.is_unique
-    assert d.doc_type.value_counts().to_dict() == {"news": 61, "comment": 40, "video": 8, "wiki_article": 1}
-    # quan hệ duy nhất là theo ID: bình luận -> video
-    vids = set(d[d.doc_type == "video"].doc_id)
-    assert set(d[d.doc_type == "comment"].parent_doc_id) <= vids
-    assert d[d.doc_type == "comment"].like_count.notna().all() and d.doc_date.notna().all()
-    # mart chính không chứa tín hiệu văn bản / lượt xem (đã tách)
-    f = feats(runs["base"])
-    assert not [c for c in f.columns if "_txt_" in c or "_att_" in c]
+def test_text_tables_are_separate_per_source(runs):
+    r = runs["base"]
+    t = lambda n: df(r, f"select * from '{{dwh}}/mart_ml_text_{n}.parquet'")
+    gn, fn, yv, yc, wk = t("google_news"), t("football_news"), t("youtube_videos"), t("youtube_comments"), t("wikipedia")
+    assert (len(gn), len(fn), len(yv), len(yc), len(wk)) == (60, 1, 8, 40, 1)
+    assert gn.news_id.is_unique and yv.video_id.is_unique and yc.comment_id.is_unique
+    # mỗi nguồn giữ cột gốc riêng, không bị ép khung chung, và không có liên kết đội/trận
+    assert {"publisher", "source_type", "search_queries", "title_hash"} <= set(gn.columns)
+    assert {"image_url", "source_name"} <= set(fn.columns)
+    assert {"channel_id", "channel_title", "description", "n_comments_collected"} <= set(yv.columns)
+    assert {"author", "author_hash", "like_count", "video_title", "days_after_video"} <= set(yc.columns)
+    for d in (gn, fn, yv, yc, wk):
+        assert not [c for c in d.columns if "team" in c or "mention" in c]
+    # quan hệ chỉ theo ID: 40 bình luận chia đều 8 video, tổng like khớp
+    assert (yv.n_comments_collected == 5).all()
+    assert yv.comment_likes_sum.sum() == yc.like_count.sum()
+    assert yc.video_title.notna().all() and (yc.days_after_video >= 0).all()
+    assert not [c for c in feats(r).columns if "_txt_" in c or "_att_" in c]      # mart chính không chứa văn bản/lượt xem
+    import os
+    assert not os.path.exists(f"{r['dwh']}/mart_ml_text_docs.parquet")             # bảng gộp cũ đã bỏ
 
 
 def test_placeholder_date_matches_are_excluded(runs):
