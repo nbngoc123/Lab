@@ -11,6 +11,7 @@ with DAG(
     schedule='@daily',
     catchup=False,
     default_args={"pool": "ingestion_pool"},
+    max_active_tasks=2,
     tags=["ingestion", "bronze", "wikidata"],
 ) as dag:
 

@@ -606,38 +606,76 @@ def log_dataset_info(
 
     return info
 
-
-
 def log_model(
     model,
     artifact_path="model",
     registered_model_name=None,
     input_example=None,
 ):
+    import inspect
     import mlflow
     import xgboost as xgb
     import torch
+    from sklearn.base import BaseEstimator
 
     if mlflow.active_run() is None:
-        raise RuntimeError("Hãy gọi start_run() trước.")
+        raise RuntimeError("Hãy gọi mlflow.start_run() trước.")
 
-    kwargs = {"name": artifact_path}
+    def build_kwargs(fn, serialization_format=None):
+        params = inspect.signature(fn).parameters
+        kwargs = {}
 
-    if registered_model_name:
-        kwargs["registered_model_name"] = registered_model_name
-    if input_example is not None:
-        kwargs["input_example"] = input_example
+        # MLflow 3.x dùng name; MLflow 2.x dùng artifact_path
+        if "name" in params:
+            kwargs["name"] = artifact_path
+        else:
+            kwargs["artifact_path"] = artifact_path
 
+        if registered_model_name:
+            kwargs["registered_model_name"] = registered_model_name
+
+        if input_example is not None:
+            kwargs["input_example"] = input_example
+
+        if (
+            serialization_format is not None
+            and "serialization_format" in params
+        ):
+            kwargs["serialization_format"] = serialization_format
+
+        return kwargs
+
+    # XGBoost thuần: dùng flavor riêng
     if isinstance(model, xgb.XGBModel):
         import mlflow.xgboost
-        return mlflow.xgboost.log_model(xgb_model=model, **kwargs)
 
+        fn = mlflow.xgboost.log_model
+        kwargs = build_kwargs(fn)
+        return fn(xgb_model=model, **kwargs)
+
+    # PyTorch
     if isinstance(model, torch.nn.Module):
         import mlflow.pytorch
-        return mlflow.pytorch.log_model(pytorch_model=model, **kwargs)
 
-    raise TypeError(f"Model chưa hỗ trợ: {type(model).__name__}")
+        fn = mlflow.pytorch.log_model
+        kwargs = build_kwargs(fn)
+        return fn(pytorch_model=model, **kwargs)
 
+    # Scikit-learn và Pipeline
+    if isinstance(model, BaseEstimator):
+        import mlflow.sklearn
+
+        fn = mlflow.sklearn.log_model
+        kwargs = build_kwargs(
+            fn,
+            serialization_format="cloudpickle",
+        )
+
+        return fn(sk_model=model, **kwargs)
+
+    raise TypeError(
+        f"Model chưa hỗ trợ: {type(model).__name__}"
+    )
 
 def log_artifact(
     path: str,

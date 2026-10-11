@@ -41,7 +41,8 @@ o as (
              when b365_home > 1 and b365_draw > 1 and b365_away > 1 then 'b365'
              -- odds-api chỉ nhận khi snapshot lấy TRƯỚC giờ đá (tránh tỉ lệ in-play / sau trận)
              when odds_api_home > 1 and odds_api_draw > 1 and odds_api_away > 1
-                  and (odds_api_updated_at is null or cast(odds_api_updated_at as timestamp) <= ord_ts) then 'odds_api'
+                  and odds_api_updated_at is not null
+                  and cast(odds_api_updated_at as timestamp) <= ord_ts then 'odds_api'
         end as odds_src,
         mkt_avg_home, mkt_avg_draw, mkt_avg_away, b365_home, b365_draw, b365_away,
         odds_api_home, odds_api_draw, odds_api_away

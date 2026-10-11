@@ -7,6 +7,8 @@ select
     price
 from {{ ref('stg_odds_base') }}
 where market_key = 'spreads'
+  and last_update is not null
+  and last_update <= commence_time
 qualify row_number() over (
     partition by match_id, bookmaker_key, outcome_name
-    order by last_update desc nulls last, snapshot_date desc nulls last) = 1
+    order by last_update desc, snapshot_date desc nulls last) = 1
