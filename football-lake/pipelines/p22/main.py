@@ -17,7 +17,11 @@ DEFAULT_SPORTS = ["soccer_epl"] if TEST_MODE else [
     "soccer_spain_la_liga", 
     "soccer_italy_serie_a", 
     "soccer_germany_bundesliga", 
-    "soccer_france_ligue_one"
+    "soccer_france_ligue_one",
+    "soccer_netherlands_eredivisie",
+    "soccer_portugal_primeira_liga",
+    "soccer_uefa_champs_league",
+    "soccer_uefa_europa_league"
 ]
 
 def get_partitions() -> list[dict]:

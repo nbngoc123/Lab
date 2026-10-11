@@ -17,7 +17,8 @@ QUERIES = {
 SELECT ?club ?clubLabel ?inception ?venue ?venueLabel ?capacity
        ?coord ?coachLabel ?websiteURL
 WHERE {
-  ?club wdt:P118 wd:Q9448 .
+  VALUES ?league { wd:Q9448 wd:Q324867 wd:Q15804 wd:Q82595 wd:Q133185 wd:Q19498 }
+  ?club wdt:P118 ?league .
   OPTIONAL { ?club wdt:P571  ?inception }
   OPTIONAL { ?club wdt:P115  ?venue .
              OPTIONAL { ?venue wdt:P1083 ?capacity }
@@ -32,7 +33,8 @@ WHERE {
 SELECT ?player ?playerLabel ?clubLabel ?dob ?height
        ?countryLabel ?positionLabel ?sexLabel
 WHERE {
-  ?club   wdt:P118 wd:Q9448 .
+  VALUES ?league { wd:Q9448 wd:Q324867 wd:Q15804 wd:Q82595 wd:Q133185 wd:Q19498 }
+  ?club wdt:P118 ?league .
   ?player p:P54 ?membership .
   ?membership ps:P54 ?club .
   FILTER NOT EXISTS { ?membership pq:P582 ?endTime }
@@ -49,7 +51,8 @@ WHERE {
     "pl_stadiums": """
 SELECT ?venue ?venueLabel ?capacity ?coord ?opened ?cityLabel ?countryLabel
 WHERE {
-  ?club  wdt:P118 wd:Q9448 .
+  VALUES ?league { wd:Q9448 wd:Q324867 wd:Q15804 wd:Q82595 wd:Q133185 wd:Q19498 }
+  ?club wdt:P118 ?league .
   ?club  wdt:P115 ?venue .
   OPTIONAL { ?venue wdt:P1083 ?capacity }
   OPTIONAL { ?venue wdt:P625  ?coord }
@@ -63,7 +66,8 @@ WHERE {
     "pl_managers": """
 SELECT ?club ?clubLabel ?coach ?coachLabel ?coachDob ?coachCountryLabel
 WHERE {
-  ?club  wdt:P118 wd:Q9448 .
+  VALUES ?league { wd:Q9448 wd:Q324867 wd:Q15804 wd:Q82595 wd:Q133185 wd:Q19498 }
+  ?club wdt:P118 ?league .
   ?club  wdt:P286 ?coach .
   OPTIONAL { ?coach wdt:P569 ?coachDob }
   OPTIONAL { ?coach wdt:P27  ?coachCountry }

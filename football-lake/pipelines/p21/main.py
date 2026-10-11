@@ -25,6 +25,10 @@ YT_QUERIES = [
     "Tin tức bóng đá Serie A",
     "Tin tức bóng đá Bundesliga",
     "Tin tức bóng đá Ligue 1",
+    "Tin tức bóng đá Champions League",
+    "Tin tức bóng đá Europa League",
+    "Tin tức bóng đá Eredivisie",
+    "Tin tức bóng đá Liga Portugal",
     "Điểm tin bóng đá thế giới",
     "Highlight bóng đá quốc tế mới nhất",
     "Bản tin bóng đá 24h"

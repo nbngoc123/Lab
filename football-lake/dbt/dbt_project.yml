@@ -26,7 +26,7 @@ clean-targets:
 vars:
   lake_bucket: football-lake
   # p26 OpenLigaDB: chỉ lấy mùa >= giá trị này ở staging (worker backfill có thể nạp sâu hơn)
-  openliga_min_season: 2024
+  openliga_min_season: 2020
   # non_team_keys: các giá trị không phải tên CLB thật (bộ lọc cho audit)
   # Mart ML ---------------------------------------------------------------------------------------------
   ml_min_match_date: '2000-01-01'   # bỏ trận có ngày placeholder (OpenLigaDB có giải rác với ngày 1970-01-01)

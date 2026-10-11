@@ -10,7 +10,13 @@ from lake.http import SESSION
 BASE = "https://v3.football.api-sports.io"
 SRC = "api-football"
 D = today()
-LEAGUE, SEASON = 39, 2024 # 2024/2025 season in API-Football is usually denoted by starting year 2024
+import datetime
+_LEAGUES = [39, 140, 135, 78, 61] # EPL, La Liga, Serie A, Bundesliga, Ligue 1
+_SEASONS = [2020, 2021, 2022, 2023, 2024]
+_day_idx = datetime.datetime.now().timetuple().tm_yday
+# Luân phiên 25 tổ hợp (5 giải x 5 mùa)
+LEAGUE = _LEAGUES[_day_idx % len(_LEAGUES)]
+SEASON = _SEASONS[(_day_idx // len(_LEAGUES)) % len(_SEASONS)]
 DAILY_BUDGET = 20         # Giới hạn 20 request/ngày để test nhanh (tránh dùng hết 100 quota)
 CHECKPOINT_KEY = "_meta/api_football/checkpoint.json"
 
