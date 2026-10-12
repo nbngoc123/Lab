@@ -26,7 +26,14 @@ with base as (
 
 played as (
     select *,
-        ord_ts + interval 3 hour                                           as known_ts,   -- thời điểm kết quả "đã biết"
+        -- Thời điểm kết quả "đã biết" (khả dụng):
+        -- 1. Có kickoff_utc: dùng kickoff_utc + 3h (thời gian thi đấu + bù giờ chuẩn)
+        -- 2. Thiếu kickoff_utc: quy ước bảo thủ cuối ngày (23:59:59 UTC).
+        --    -> Tuyệt đối không cho kết quả trận này làm đặc trưng cho bất kỳ trận nào khác cùng ngày.
+        case
+            when kickoff_utc is not null then kickoff_utc + interval 3 hour
+            else cast(match_date as timestamp) + interval 23 hour + interval 59 minute + interval 59 second
+        end                                                                as known_ts,
         (points = 3)::int                                                  as win,
         (goals_against = 0)::int                                           as cs,
         (goals_for > 0 and goals_against > 0)::int                         as btts,
@@ -77,11 +84,11 @@ roll as (
         case when count(res) over w5 >= 5 then string_agg(res, '') over w5 end as f_form5
     from played
     window
-        wall as (partition by team_key order by ord_ts, match_key rows between unbounded preceding and current row),
-        w3   as (partition by team_key order by ord_ts, match_key rows between 2  preceding and current row),
-        w5   as (partition by team_key order by ord_ts, match_key rows between 4  preceding and current row),
-        w10  as (partition by team_key order by ord_ts, match_key rows between 9  preceding and current row),
-        w20  as (partition by team_key order by ord_ts, match_key rows between 19 preceding and current row)
+        wall as (partition by team_key order by known_ts, match_key rows between unbounded preceding and current row),
+        w3   as (partition by team_key order by known_ts, match_key rows between 2  preceding and current row),
+        w5   as (partition by team_key order by known_ts, match_key rows between 4  preceding and current row),
+        w10  as (partition by team_key order by known_ts, match_key rows between 9  preceding and current row),
+        w20  as (partition by team_key order by known_ts, match_key rows between 19 preceding and current row)
 ),
 
 -- ---------- phong độ theo sân (chỉ các trận cùng sân nhà/khách) ----------
@@ -92,7 +99,7 @@ roll_side as (
         {{ roll_avg('goals_for', 'w5', 5) }}     as f_side_gf_l5,
         {{ roll_avg('goals_against', 'w5', 5) }} as f_side_ga_l5
     from played
-    window w5 as (partition by team_key, side order by ord_ts, match_key rows between 4 preceding and current row)
+    window w5 as (partition by team_key, side order by known_ts, match_key rows between 4 preceding and current row)
 ),
 
 -- ---------- tích luỹ trong mùa (theo giải) ----------
@@ -105,7 +112,7 @@ roll_season as (
         avg(goals_against) over ws                               as f_s_ga_pg,
         avg(gd) over ws                                          as f_s_gd_pg
     from played
-    window ws as (partition by team_key, competition_key, season order by ord_ts, match_key
+    window ws as (partition by team_key, competition_key, season order by known_ts, match_key
                   rows between unbounded preceding and current row)
 ),
 
@@ -118,7 +125,7 @@ roll_h2h as (
         avg(goals_for) over wh                                   as f_h2h_gf,
         avg(goals_against) over wh                               as f_h2h_ga
     from played
-    window wh as (partition by team_key, opponent_key order by ord_ts, match_key rows between 4 preceding and current row)
+    window wh as (partition by team_key, opponent_key order by known_ts, match_key rows between 4 preceding and current row)
 ),
 
 -- ---------- mật độ thi đấu: số trận đã đá trong 7/14/30 ngày trước giờ đá ----------

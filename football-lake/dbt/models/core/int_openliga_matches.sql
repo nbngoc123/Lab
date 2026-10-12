@@ -11,5 +11,11 @@ where sport_id = {{ var('openliga_football_sport_id', 1) }}
   and trim(home_team) <> trim(away_team)
   and match_time_utc is not null
   and match_time_utc >= timestamp '2000-01-01'   -- OpenLigaDB có giải rác với giờ đá placeholder 1970-01-01
-  and lower(league_shortcut) not in ('test-del', 'goalunited23', 'bulimo', 'klb')
+  -- Loại các giải test / game ảo / giải dummy có bằng chứng rõ ràng:
+  --   test-del, tst1: giải test của người dùng
+  --   goalunited23, bulimo: game quản lý bóng đá ảo
+  --   klb: giải thử nghiệm Kreisliga B
+  --   essl: giải 'Empty Stands Dummy Team' (chứa toàn bộ đội ảo)
+  --   blclaude: giải test tự tạo
+  and lower(league_shortcut) not in ('test-del', 'goalunited23', 'bulimo', 'klb', 'essl', 'blclaude', 'tst1')
   {% if core_sc %}and league_shortcut in ({{ core_sc | map('tojson') | join(', ') | replace('"', "'") }}){% endif %}

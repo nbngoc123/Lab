@@ -27,11 +27,6 @@ with m as (
 h as (select * from {{ ref('mart_ml_team_match_features') }} where side = 'h'),
 a as (select * from {{ ref('mart_ml_team_match_features') }} where side = 'a'),
 
-lab as (
-    select match_key, percent_rank() over (order by ord_ts, match_key) as pr
-    from m
-    where is_finished and home_goals is not null and away_goals is not null
-),
 
 -- ---------- tỉ lệ cược -> xác suất ngầm định (chọn nguồn đầy đủ nhất, ưu tiên thị trường trung bình) ----------
 o as (
@@ -63,7 +58,12 @@ ref_roll as (
         case when count(*) over w >= 10 then avg(cards) over w end         as avg_cards,
         case when count(fouls) over w >= 10 then avg(fouls) over w end     as avg_fouls
     from (
-        select referee, ord_ts + interval 3 hour as known_ts, ord_ts, match_key,
+        select referee,
+               case
+                   when kickoff_utc is not null then kickoff_utc + interval 3 hour
+                   else cast(match_date as timestamp) + interval 23 hour + interval 59 minute + interval 59 second
+               end as known_ts,
+               ord_ts, match_key,
                home_yellows + away_yellows + coalesce(home_reds, 0) + coalesce(away_reds, 0) as cards,
                home_fouls + away_fouls as fouls
         from m
@@ -80,8 +80,8 @@ select
     (m.is_finished and m.home_goals is not null and m.away_goals is not null)             as is_labeled,
     case
         when not (m.is_finished and m.home_goals is not null and m.away_goals is not null) then 'predict'
-        when l.pr < {{ var('ml_train_until') }} then 'train'
-        when l.pr < {{ var('ml_valid_until') }} then 'valid'
+        when m.match_date <= date '{{ var('ml_train_until_date', '2024-06-30') }}' then 'train'
+        when m.match_date <= date '{{ var('ml_valid_until_date', '2025-06-30') }}' then 'valid'
         else 'test'
     end                                                                                    as split,
     (h.f_n_prev >= {{ var('ml_min_history') }} and a.f_n_prev >= {{ var('ml_min_history') }}) as is_warm,
@@ -147,7 +147,6 @@ select
 from m
 join h on h.match_key = m.match_key
 join a on a.match_key = m.match_key
-left join lab l on l.match_key = m.match_key
 left join op on op.match_key = m.match_key
 left join {{ ref('dim_competition') }} dc on dc.competition_key = m.competition_key
 left join {{ ref('dim_team') }} ht on ht.team_key = m.home_key

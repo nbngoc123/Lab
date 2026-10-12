@@ -18,6 +18,11 @@ models:
     columns:
       - name: team_match_key
         tests: [not_null, unique]
+  - name: mart_ml_temporal_audit
+    description: "Bảng AUDIT cấp trận: lưu mốc ord_ts, known_ts, trạng thái thiếu giờ, split và f_n_prev."
+    columns:
+      - name: match_key
+        tests: [not_null, unique]
   - name: mart_ml_match_attention
     description: "Bảng PHỤ (join tuỳ chọn): lượt xem Wikipedia 7/28 ngày trước trận; chỉ trận mà ít nhất 1 đội có dữ liệu."
     columns:
