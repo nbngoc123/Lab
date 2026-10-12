@@ -147,7 +147,7 @@ odds as (
     group by 1
 ),
 
--- ---------- Spine: hợp mọi khóa trận từ 4 nguồn ----------
+-- ---------- Spine: hợp mọi khóa trận từ 5 nguồn ----------
 spine as (
     select match_key, min(match_date) as match_date, min(home_key) as home_key, min(away_key) as away_key
     from (
@@ -157,6 +157,7 @@ spine as (
         union all select match_key, match_date, home_key, away_key from af
         union all select match_key, match_date, home_key, away_key from ol
     ) x
+    where home_key <> away_key
     group by match_key
 ),
 
