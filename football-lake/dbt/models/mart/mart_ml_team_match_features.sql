@@ -160,7 +160,9 @@ select
     se.f_s_ppg, se.f_s_gf_pg, se.f_s_ga_pg, se.f_s_gd_pg,
     coalesce(h.f_h2h_n, 0)                                                    as f_h2h_n,
     h.f_h2h_pts, h.f_h2h_gf, h.f_h2h_ga,
-    case when r.last_ord_ts is not null then epoch(b.ord_ts - r.last_ord_ts) / 86400.0 end as f_rest_days,
+    -- Số ngày nghỉ kể từ trận gần nhất: giới hạn trần 30 ngày (ngưỡng phục hồi thể lực hoàn toàn / bão hòa).
+    -- Tránh giá trị ngoại lai cực đoan (lên tới 1.000+ ngày) khi đội thăng hạng hoặc giữa các mùa giải cúp.
+    case when r.last_ord_ts is not null then least(epoch(b.ord_ts - r.last_ord_ts) / 86400.0, 30.0) end as f_rest_days,
     coalesce(c.f_n_7d, 0)                                                     as f_n_7d,
     coalesce(c.f_n_14d, 0)                                                    as f_n_14d,
     coalesce(c.f_n_30d, 0)                                                    as f_n_30d,
