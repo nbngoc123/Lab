@@ -31,8 +31,8 @@ vars:
   # Mart ML ---------------------------------------------------------------------------------------------
   ml_min_match_date: '2000-01-01'   # bỏ trận có ngày placeholder (OpenLigaDB có giải rác với ngày 1970-01-01)
   ml_min_history: 5          # is_warm: cả 2 đội cần >= N trận trước đó
-  ml_train_until: 0.70       # chia theo thời gian trên các trận đã có nhãn: <0.70 train, <0.85 valid, còn lại test
-  ml_valid_until: 0.85
+  ml_train_until_date: '2024-06-30' # Chia theo ngày chốt cố định (tránh xé lẻ vòng đấu cùng ngày)
+  ml_valid_until_date: '2025-06-30'
   non_team_keys: "('unknown','Bundesliga','La Liga','Ligue 1','Premier League','Serie A','Champions League','European Championship','FIFA World Cup')"
 
 seeds:

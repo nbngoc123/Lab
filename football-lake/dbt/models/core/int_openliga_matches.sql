@@ -11,4 +11,5 @@ where sport_id = {{ var('openliga_football_sport_id', 1) }}
   and trim(home_team) <> trim(away_team)
   and match_time_utc is not null
   and match_time_utc >= timestamp '2000-01-01'   -- OpenLigaDB có giải rác với giờ đá placeholder 1970-01-01
+  and lower(league_shortcut) not in ('test-del', 'goalunited23', 'bulimo', 'klb')
   {% if core_sc %}and league_shortcut in ({{ core_sc | map('tojson') | join(', ') | replace('"', "'") }}){% endif %}
