@@ -38,9 +38,9 @@ TABLES = {
     "fact_team_match": "dwh/fact_team_match.parquet",
     "fact_goal":       "dwh/fact_goal.parquet",
     # === Mart ML ===
-    "mart_ml_match_features":      "dwh/mart/mart_ml_match_features.parquet",
-    "mart_ml_team_match_features": "dwh/mart/mart_ml_team_match_features.parquet",
-    "mart_ml_goals":               "dwh/mart/mart_ml_goals.parquet",
+    "mart_ml_match_features":      "dwh/mart_ml_match_features.parquet",
+    "mart_ml_team_match_features": "dwh/mart_ml_team_match_features.parquet",
+    "mart_ml_goals":               "dwh/mart_ml_goals.parquet",
 }
 
 
