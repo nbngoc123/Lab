@@ -41,45 +41,44 @@ def fetch_forecast(lat: float, lon: float) -> dict:
     return r.json()
 
 
+def _history_end() -> str:
+    """Ngày kết thúc của khoảng lịch sử: hôm nay - 5 ngày (archive API trễ ~5 ngày)."""
+    import datetime as _dt
+    return (_dt.date.today() - _dt.timedelta(days=5)).isoformat()
+
+
 def load_stadiums() -> list:
-    import duckdb
-    import pandas as pd
-    from lake.team_lookup import add_team_key
-    import numpy as np
-    import os
-    
+    """Lấy danh sách sân từ Parquet staging trên MinIO (không đọc file .duckdb nữa)."""
+    import duckdb, numpy as np
+    endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000").replace("http://", "").replace("https://", "")
+    bucket   = os.getenv("MINIO_BUCKET", "football-lake")
+    path     = f"s3://{bucket}/dwh/staging/stg_wikidata_stadiums.parquet"
+    print(f"-> Đọc danh sách sân từ {path}")
+
     try:
-        # Đường dẫn database trong Docker container hoặc local
-        db_path = "/opt/project/dbt/football_lake.duckdb"
-        if not os.path.exists(db_path):
-            db_path = "dbt/football_lake.duckdb" # Fallback chạy local
-            
-        conn = duckdb.connect(db_path, read_only=True)
-        # Cấu hình S3 credentials để DuckDB có thể đọc các view ánh xạ tới S3 (MinIO)
-        conn.execute("INSTALL httpfs; LOAD httpfs;")
-        conn.execute(f"SET s3_endpoint='{os.getenv('MINIO_ENDPOINT', 'minio:9000').replace('http://', '')}';")
-        conn.execute(f"SET s3_access_key_id='{os.getenv('MINIO_ACCESS_KEY', 'minioadmin')}';")
-        conn.execute(f"SET s3_secret_access_key='{os.getenv('MINIO_SECRET_KEY', 'minioadmin')}';")
-        conn.execute("SET s3_use_ssl=false;")
-        conn.execute("SET s3_url_style='path';")
-        
-        query = "SELECT venue_name as venue, lat, lon FROM main_staging.stg_wikidata_stadiums WHERE lat IS NOT NULL AND lon IS NOT NULL"
-        df = conn.execute(query).df()
-        conn.close()
+        con = duckdb.connect(":memory:")
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        con.execute(
+            f"SET s3_endpoint='{endpoint}'; SET s3_use_ssl=false; SET s3_url_style='path';"
+            f"SET s3_access_key_id='{os.getenv('MINIO_ACCESS_KEY','minioadmin')}';"
+            f"SET s3_secret_access_key='{os.getenv('MINIO_SECRET_KEY','minioadmin123')}';")
+        df = con.execute(
+            f"SELECT venue_name AS venue, lat, lon FROM read_parquet('{path}') "
+            f"WHERE lat IS NOT NULL AND lon IS NOT NULL"
+        ).df()
     except Exception as e:
-        print(f"  ! Lỗi DuckDB: {e}")
-        return []
-        
+        raise RuntimeError(
+            f"Không đọc được danh sách sân từ MinIO: {e}\n"
+            "Hãy chạy p06 + dbt staging trước để có stg_wikidata_stadiums.parquet"
+        ) from e
+
     if df.empty:
-        print("  ! Không tìm thấy sân vận động nào trong DuckDB.")
-        return []
-        
+        raise RuntimeError("Không có sân nào có toạ độ trong stg_wikidata_stadiums.")
+
     df = add_team_key(df, "venue", source="openmeteo", out_col="team_key")
     if TEST_MODE:
         df = df.head(2)
-        
-    df = df.replace({np.nan: None})
-    return df.to_dict("records")
+    return df.replace({np.nan: None}).to_dict("records")
 
 
 def get_partitions() -> list[dict]:
@@ -95,7 +94,7 @@ def ingest(partition: dict) -> str:
     venue_safe = venue.replace(" ", "_").replace("/", "_")
     
     start = "2024-08-01" if TEST_MODE else "2020-08-01"
-    end = "2024-08-02" if TEST_MODE else "2026-06-01"
+    end   = "2024-08-02" if TEST_MODE else _history_end()
     
     # Lấy lịch sử
     hist_key = f"raw/open_meteo/historical/venue={venue_safe}/ingest_date={D}/weather.json.gz"
