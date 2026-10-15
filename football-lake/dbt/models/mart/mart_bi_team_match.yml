@@ -1,0 +1,170 @@
+version: 2
+
+models:
+  - name: mart_bi_team_match
+    description: >-
+      Mart BI hiệu suất đội theo trận, grain một dòng cho mỗi (match_key, team_key).
+      Đọc trực tiếp fact_team_match, không join, lọc dòng, tổng hợp hoặc dedup.
+      Giữ cả trận đã kết thúc và chưa kết thúc. Chỉ công bố tỷ số, điểm và W/D/L
+      khi is_finished=true và đủ goals_for/goals_against (has_result=true).
+      Điểm được tái sử dụng từ Core, không tính lại. Thống kê thi đấu chỉ công bố
+      cho trận đã kết thúc; thiếu dữ liệu vẫn là NULL, không thay bằng 0.
+      Không có kiểm soát bóng/chuyền bóng vì Core chưa cung cấp các cột đó.
+      Kế thừa mùa giải, khóa thực thể và chất lượng dữ liệu từ Core; không tự sửa chúng.
+      Dùng has_result=true khi tính thành tích; dùng COUNT(DISTINCT match_key) khi
+      đếm trận vì mỗi trận có hai dòng đội. total_goals lặp lại ở cả hai phía,
+      không SUM toàn bảng để tính tổng bàn của các trận; dùng SUM(goals_for).
+      SUM(is_win/is_draw/is_loss) đếm kết quả, AVG trên các cờ này tính tỷ lệ
+      trong các trận đủ kết quả (NULL bị loại). Công khai số quan sát không NULL
+      khi so sánh xG hoặc thống kê có độ phủ khác nhau. Khi tổng hợp shot_accuracy
+      hoặc PPDA, tính lại từ tổng tử/mẫu trên cùng tập dòng đủ dữ liệu, không lấy
+      trung bình không trọng số các tỷ lệ từng trận. Đây là thống kê sau trận,
+      không phải bảng đặc trưng dùng trực tiếp để dự đoán trước trận.
+      Materialization external và vị trí Parquet kế thừa cấu hình dự án:
+      s3://football-lake/dwh/mart_bi_team_match.parquet với profile hiện tại.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [match_key, team_key]
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('fact_team_match')
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_match_distinct_opponent
+          expression: "team_key <> opponent_key"
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_match_side_matches_home_flag
+          expression: "(side = 'h' and is_home) or (side = 'a' and not is_home)"
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_match_result_availability
+          expression: >-
+            (has_result and is_finished and goals_for is not null
+             and goals_against is not null and points is not null and team_result is not null)
+            or (not has_result and goals_for is null and goals_against is null
+                and points is null and team_result is null and goal_difference is null
+                and total_goals is null and is_win is null and is_draw is null
+                and is_loss is null and is_clean_sheet is null and goals_minus_xg is null)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_match_result_matches_score
+          expression: >-
+            not has_result
+            or (goals_for > goals_against and points = 3 and team_result = 'W')
+            or (goals_for = goals_against and points = 1 and team_result = 'D')
+            or (goals_for < goals_against and points = 0 and team_result = 'L')
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_match_unfinished_statistics_are_null
+          expression: >-
+            is_finished or (xg_for is null and xg_against is null and xg_difference is null
+            and shots is null and shots_target is null and shot_accuracy is null
+            and corners is null and fouls is null and yellows is null and reds is null
+            and ppda_att is null and ppda_def is null and ppda is null
+            and deep is null and deep_allowed is null and xpts is null
+            and npxg is null and npxga is null)
+    columns:
+      - name: team_match_key
+        description: "Khóa Core match_key|side; giữ để truy vết dòng nguồn."
+        tests:
+          - not_null
+          - unique
+          - relationships: {to: ref('fact_team_match'), field: team_match_key}
+      - name: match_key
+        description: "Khóa trận; xuất hiện một lần cho mỗi đội tham gia."
+        tests:
+          - not_null
+          - relationships: {to: ref('fact_match'), field: match_key}
+      - name: team_key
+        description: "Khóa đội đang được phân tích, liên kết dim_team.team_key."
+        tests: [not_null]
+      - name: opponent_key
+        description: "Khóa đối thủ, liên kết dim_team.team_key."
+        tests: [not_null]
+      - name: competition_key
+        description: "Khóa giải kế thừa Core, liên kết dim_competition.competition_key."
+      - name: season
+        description: "Năm bắt đầu mùa theo Core; không suy lại mùa trong Mart."
+      - name: match_date
+        description: "Ngày trận theo Core, có thể liên kết dim_date.date_key."
+      - name: kickoff_utc
+        description: "Thời điểm bắt đầu theo Core, có thể NULL; không tự gán giờ."
+      - name: side
+        description: "h = đội nhà; a = đội khách, theo fixture Core, không suy ra sân trung lập."
+        tests:
+          - not_null
+          - accepted_values: {values: ['h', 'a']}
+      - name: is_home
+        description: "TRUE khi side=h, FALSE khi side=a."
+        tests: [not_null]
+      - name: is_finished
+        description: "Trạng thái kết thúc do Core xác định; không suy lại từ tỷ số."
+        tests: [not_null]
+      - name: has_result
+        description: "TRUE khi trận kết thúc và đủ tỷ số hai đội; không biểu thị nguồn đồng thuận tỷ số."
+        tests: [not_null]
+      - name: goals_for
+        description: "Bàn đội ghi; NULL khi chưa đủ kết quả cuối trận."
+      - name: goals_against
+        description: "Bàn đội nhận; NULL khi chưa đủ kết quả cuối trận."
+      - name: goal_difference
+        description: "goals_for - goals_against; NULL khi chưa đủ kết quả."
+      - name: total_goals
+        description: "Tổng bàn hai đội; lặp ở hai phía trận, không cộng hai lần."
+      - name: points
+        description: "Điểm Core: thắng 3, hòa 1, thua 0; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: [0, 1, 3], quote: false}
+      - name: team_result
+        description: "W/D/L từ góc nhìn đội, dựa trên điểm Core; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: ['W', 'D', 'L']}
+      - name: is_win
+        description: "1 nếu thắng, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_draw
+        description: "1 nếu hòa, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_loss
+        description: "1 nếu thua, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_clean_sheet
+        description: "1 nếu không thủng lưới, 0 nếu có; NULL khi chưa đủ kết quả."
+        tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: xg_for
+        description: "xG thực tế của đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: xg_against
+        description: "xG thực tế của đối thủ; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: xg_difference
+        description: "xg_for - xg_against; NULL nếu thiếu một phía hoặc trận chưa kết thúc."
+      - name: goals_minus_xg
+        description: "Bàn ghi trừ xG; cần đủ kết quả và xg_for."
+      - name: shots
+        description: "Số cú sút đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: shots_target
+        description: "Số cú sút trúng đích đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: shot_accuracy
+        description: "shots_target/shots dạng tỷ lệ (không nhân 100); NULL khi thiếu dữ liệu, shots=0 hoặc trận chưa kết thúc."
+      - name: corners
+        description: "Phạt góc đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: fouls
+        description: "Phạm lỗi đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: yellows
+        description: "Thẻ vàng đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: reds
+        description: "Thẻ đỏ đội; NULL nếu trận chưa kết thúc hoặc nguồn thiếu."
+      - name: ppda_att
+        description: "Thành phần tử số PPDA Understat từ Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: ppda_def
+        description: "Thành phần mẫu số PPDA Understat từ Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: ppda
+        description: "ppda_att/ppda_def như Mart ML; NULL khi mẫu bằng 0, nguồn thiếu hoặc trận chưa kết thúc."
+      - name: deep
+        description: "Chỉ số deep của đội từ Understat/Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: deep_allowed
+        description: "Chỉ số deep_allowed từ Understat/Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: xpts
+        description: "Điểm kỳ vọng Understat; khác điểm kết quả points, NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: npxg
+        description: "xG không tính penalty của đội từ Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
+      - name: npxga
+        description: "xG không tính penalty của đối thủ từ Core; NULL khi chưa kết thúc hoặc nguồn thiếu."
