@@ -20,7 +20,7 @@ BUCKET    = os.getenv("MINIO_BUCKET",       "football-lake")
 
 PG_HOST   = os.getenv("PG_HOST",     "postgres")
 PG_PORT   = os.getenv("PG_PORT",     "5432")
-PG_DB     = os.getenv("PG_DB",       "airflow")   # dùng chung DB airflow, schema riêng
+PG_DB     = os.getenv("PG_DB",       "football_dwh")  # database DWH riêng biệt
 PG_USER   = os.getenv("PG_USER",     "airflow")
 PG_PASS   = os.getenv("PG_PASSWORD", "airflow")
 PG_SCHEMA = os.getenv("PG_DWH_SCHEMA", "dwh")
