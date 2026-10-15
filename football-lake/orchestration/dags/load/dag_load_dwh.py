@@ -1,0 +1,34 @@
+"""DAG: Load dữ liệu đã transform (Parquet trên MinIO) vào PostgreSQL schema 'dwh'.
+Chạy sau khi dag_dbt_core hoàn tất.
+"""
+from __future__ import annotations
+from datetime import datetime
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+default_args = {"owner": "airflow", "retries": 1}
+
+with DAG(
+    dag_id="dag_load_dwh",
+    description="Load Parquet từ MinIO vào PostgreSQL schema dwh (Superset)",
+    schedule="0 3 * * *",     # chạy lúc 03:00 hàng ngày, sau dag_dbt_core (02:xx)
+    start_date=datetime(2026, 10, 1),
+    catchup=False,
+    max_active_runs=1,
+    default_args=default_args,
+    tags=["dwh", "load"],
+) as dag:
+
+    def _load(**ctx):
+        import sys, os
+        sys.path.insert(0, "/opt/project")
+        from warehouse.load_to_pg import load_all
+        results = load_all()
+        failed = [t for t, c in results.items() if c < 0]
+        if failed:
+            raise RuntimeError(f"Các bảng lỗi khi load: {failed}")
+
+    load_task = PythonOperator(
+        task_id="load_parquet_to_postgres",
+        python_callable=_load,
+    )
