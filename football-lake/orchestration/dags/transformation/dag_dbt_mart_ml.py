@@ -3,7 +3,7 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-from common.assets import fact_match
+from common.assets import fact_match, mart_ml
 
 # ==============================================================================
 # Mart ML: đọc core + staging (Parquet trên MinIO) -> dwh/mart_ml_*.parquet
@@ -26,4 +26,5 @@ with DAG(
         bash_command="cd /opt/project/dbt && dbt build --select team_alias int_team_alias path:models/mart/ml --profiles-dir .",
         env={"DBT_TARGET_PATH": "/tmp/dbt/dag_dbt_mart_ml/target", "DBT_LOG_PATH": "/tmp/dbt/dag_dbt_mart_ml/logs"},
         append_env=True,
+        outlets=[mart_ml],
     )

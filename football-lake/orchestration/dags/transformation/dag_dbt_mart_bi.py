@@ -9,7 +9,7 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
-from common.assets import fact_match
+from common.assets import fact_match, mart_bi
 
 default_args = {
     "owner": "airflow",
@@ -54,6 +54,7 @@ with DAG(
     load_to_postgres = PythonOperator(
         task_id="load_bi_to_postgres",
         python_callable=_load_bi_to_postgres,
+        outlets=[mart_bi],
     )
 
     dbt_build_bi >> load_to_postgres

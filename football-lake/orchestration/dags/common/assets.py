@@ -35,14 +35,35 @@ openliga = Asset("minio://football-lake/raw/openliga")
 # ==========================================
 # STAGING ASSETS (dbt - DuckDB)
 # ==========================================
-# Ghi chú: DuckDB Staging tạo views thay vì ghi file vật lý,
-# nhưng ta vẫn có thể dùng Asset báo hiệu staging hoàn tất
-dbt_staging_complete = Asset("duckdb://football-lake/staging/complete")
+# Nhóm Staging Cốt Lõi (Core dependencies)
+stg_football_data_co_uk = Asset("duckdb://football-lake/staging/football_data_co_uk")
+stg_football_data_org   = Asset("duckdb://football-lake/staging/football_data_org")
+stg_understat           = Asset("duckdb://football-lake/staging/understat")
+stg_openliga            = Asset("duckdb://football-lake/staging/openliga")
+stg_api_football        = Asset("duckdb://football-lake/staging/api_football")
+stg_open_meteo          = Asset("duckdb://football-lake/staging/open_meteo")
+stg_wikidata            = Asset("duckdb://football-lake/staging/wikidata")
+stg_thesportsdb         = Asset("duckdb://football-lake/staging/thesportsdb")
+
+# Nhóm Staging Text & Social Media (ML-only dependencies)
+stg_wikimedia           = Asset("duckdb://football-lake/staging/wikimedia")
+stg_wikipedia           = Asset("duckdb://football-lake/staging/wikipedia")
+stg_google_news         = Asset("duckdb://football-lake/staging/google_news")
+stg_youtube             = Asset("duckdb://football-lake/staging/youtube")
+stg_football_news       = Asset("duckdb://football-lake/staging/football_news")
+
+dbt_staging_complete    = Asset("duckdb://football-lake/staging/complete")
 
 # ==========================================
-# CORE / MART ASSETS (dbt - DuckDB)
+# CORE ASSETS (dbt - DuckDB)
 # ==========================================
-dim_team = Asset("duckdb://football-lake/core/dim_team")
+dim_team   = Asset("duckdb://football-lake/core/dim_team")
 dim_player = Asset("duckdb://football-lake/core/dim_player")
 fact_match = Asset("duckdb://football-lake/core/fact_match")
+
+# ==========================================
+# MART ASSETS (dbt - DuckDB & Postgres DWH)
+# ==========================================
+mart_bi = Asset("duckdb://football-lake/mart/bi")
+mart_ml = Asset("duckdb://football-lake/mart/ml")
 football_obt = Asset("duckdb://football-lake/mart/football_obt")

@@ -2,17 +2,35 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-from common.assets import dim_team, dim_player, fact_match
+from common.assets import (
+    dim_team, dim_player, fact_match,
+    stg_football_data_co_uk, stg_football_data_org,
+    stg_understat, stg_openliga, stg_api_football,
+    stg_open_meteo, stg_wikidata, stg_thesportsdb
+)
+
+# Điều kiện kích hoạt: TẤT CẢ các nguồn Staging cốt lõi đều phải hoàn tất
+core_schedule = (
+    stg_football_data_co_uk
+    & stg_football_data_org
+    & stg_understat
+    & stg_openliga
+    & stg_api_football
+    & stg_open_meteo
+    & stg_wikidata
+    & stg_thesportsdb
+)
 
 # ==============================================================================
 # CORE (dbt - DuckDB): dim_team, dim_player, dim_venue, dim_competition, dim_date,
 #                      fact_match, fact_team_match, fact_player_season
-# Chạy mỗi ngày sau khi các DAG staging đã cập nhật. Core đọc thẳng Parquet staging
-# từ MinIO nhờ register_upstream_external_models() ở on-run-start.
+# Kích hoạt tự động khi toàn bộ các nguồn Staging phục vụ Core đã cập nhật xong.
+# Core đọc thẳng Parquet staging từ MinIO nhờ register_upstream_external_models() ở on-run-start.
 # ==============================================================================
 with DAG(
     dag_id="dag_dbt_core",
-    schedule="0 2 * * *",
+    description="Xây dựng Core DWH khi toàn bộ các nguồn Staging cốt lõi hoàn tất",
+    schedule=core_schedule,
     start_date=datetime(2023, 1, 1),
     catchup=False,
     max_active_runs=1,
