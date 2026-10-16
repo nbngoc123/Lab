@@ -310,6 +310,7 @@ def sync_metadata():
     logger.info("✓ Đã nạp thành công bảng %s.mart_ml_model_class_metrics", PG_SCHEMA)
 
     # 4.4 Cập nhật View dwh.v_model_performance_kpi kết hợp cả Benchmark và Live Inference
+    cur.execute(f"DROP VIEW IF EXISTS {PG_SCHEMA}.v_model_performance_kpi CASCADE;")
     cur.execute(f"""
     CREATE OR REPLACE VIEW {PG_SCHEMA}.v_model_performance_kpi AS
     SELECT
@@ -373,6 +374,7 @@ def sync_metadata():
     """)
 
     # 4.5 View Feature Importance cho Superset (Top 25 đặc trưng)
+    cur.execute(f"DROP VIEW IF EXISTS {PG_SCHEMA}.v_model_feature_importance CASCADE;")
     cur.execute(f"""
     CREATE OR REPLACE VIEW {PG_SCHEMA}.v_model_feature_importance AS
     SELECT
@@ -386,6 +388,7 @@ def sync_metadata():
     """)
 
     # 4.6 View Class Metrics cho Superset
+    cur.execute(f"DROP VIEW IF EXISTS {PG_SCHEMA}.v_model_class_metrics CASCADE;")
     cur.execute(f"""
     CREATE OR REPLACE VIEW {PG_SCHEMA}.v_model_class_metrics AS
     SELECT *
