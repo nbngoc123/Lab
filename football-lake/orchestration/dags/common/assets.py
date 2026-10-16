@@ -1,5 +1,4 @@
 from airflow.sdk import Asset
-from common.pools import POOL_HEAVY, POOL_INGESTION, POOL_BI
 
 # ==========================================
 # BRONZE / RAW ASSETS (MinIO Data Lake)
