@@ -545,13 +545,15 @@ class DWHStorageSink:
             """)
             con.execute(f"CREATE SCHEMA IF NOT EXISTS pg.{PG_SCHEMA};")
 
-            # Ghi bảng dwh.mart_ml_predictions
-            con.execute(f"DROP TABLE IF EXISTS pg.{PG_SCHEMA}.mart_ml_predictions;")
-            con.execute(f"CREATE TABLE pg.{PG_SCHEMA}.mart_ml_predictions AS SELECT * FROM df_predictions;")
+            # Ghi bảng dwh.mart_ml_predictions (dùng DELETE + INSERT để không làm hỏng các VIEW đang phụ thuộc)
+            con.execute(f"CREATE TABLE IF NOT EXISTS pg.{PG_SCHEMA}.mart_ml_predictions AS SELECT * FROM df_predictions WHERE 1=0;")
+            con.execute(f"DELETE FROM pg.{PG_SCHEMA}.mart_ml_predictions;")
+            con.execute(f"INSERT INTO pg.{PG_SCHEMA}.mart_ml_predictions SELECT * FROM df_predictions;")
 
             # Ghi bảng dwh.mart_ml_prediction_shap_factors
-            con.execute(f"DROP TABLE IF EXISTS pg.{PG_SCHEMA}.mart_ml_prediction_shap_factors;")
-            con.execute(f"CREATE TABLE pg.{PG_SCHEMA}.mart_ml_prediction_shap_factors AS SELECT * FROM df_shap;")
+            con.execute(f"CREATE TABLE IF NOT EXISTS pg.{PG_SCHEMA}.mart_ml_prediction_shap_factors AS SELECT * FROM df_shap WHERE 1=0;")
+            con.execute(f"DELETE FROM pg.{PG_SCHEMA}.mart_ml_prediction_shap_factors;")
+            con.execute(f"INSERT INTO pg.{PG_SCHEMA}.mart_ml_prediction_shap_factors SELECT * FROM df_shap;")
 
             # 3. Tạo VIEW phân tích tiện lợi phục vụ trực tiếp Apache Superset Dashboard
             view_sql = f"""
@@ -621,11 +623,14 @@ class DWHStorageSink:
             FROM pg.{PG_SCHEMA}.v_match_predictions_dashboard
             WHERE is_upcoming_future = true OR split = 'predict'
             ORDER BY match_date ASC, kickoff_utc ASC;
-            """
-            con.execute(view_sql)
+            try:
+                con.execute(view_sql)
+                logger.info("✓ Đã tạo/cập nhật View Superset: %s.v_match_predictions_dashboard & v_upcoming_match_predictions", PG_SCHEMA)
+            except Exception as e_view:
+                logger.debug("View creation note (có thể đã tồn tại sẵn trong PostgreSQL): %s", e_view)
+
             logger.info("✓ Đã nạp thành công bảng PostgreSQL: %s.mart_ml_predictions (%d dòng)", PG_SCHEMA, len(pred_df))
             logger.info("✓ Đã nạp thành công bảng PostgreSQL: %s.mart_ml_prediction_shap_factors (%d dòng)", PG_SCHEMA, len(shap_df))
-            logger.info("✓ Đã tạo View Superset: %s.v_match_predictions_dashboard & v_upcoming_match_predictions", PG_SCHEMA)
         except Exception as e:
             logger.error("Lỗi khi ghi PostgreSQL: %s", e)
         finally:
