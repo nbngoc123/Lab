@@ -9,6 +9,7 @@ import os
 import urllib.request
 import urllib.parse
 from pathlib import Path
+from typing import Optional, Dict, Any
 import psycopg2
 import pandas as pd
 
