@@ -32,8 +32,8 @@ with DAG(
         sys.path.insert(0, "/opt/project")
         from warehouse.ml_inference import run_pipeline
 
-        # Chạy inference cho toàn bộ các trận đấu cần dự đoán và kiểm định
-        run_pipeline(split_filter=None, limit=None)
+        # Chạy inference cho các trận đấu tương lai tính từ hôm nay trở đi
+        run_pipeline(upcoming_only=True)
 
     inference_task = PythonOperator(
         task_id="predict_and_explain_matches",
