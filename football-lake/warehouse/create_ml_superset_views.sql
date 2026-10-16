@@ -3,7 +3,7 @@
 -- Database: football_dwh | Schema: dwh
 -- ==============================================================================
 
--- 1. VIEW CHÍNH: Danh sách trận đấu, dự đoán 1X2 và tóm tắt yếu tố tác động
+-- 1. VIEW CHÍNH: Toàn bộ danh sách trận đấu kèm phân loại timeline theo CURRENT_DATE
 CREATE OR REPLACE VIEW dwh.v_match_predictions_dashboard AS
 SELECT
     p.match_key,
@@ -24,6 +24,18 @@ SELECT
     p.split,
     p.is_finished,
     p.actual_result,
+    
+    -- ===== PHÂN LOẠI TIMELINE THEO NGÀY HÔM NAY (CURRENT_DATE) =====
+    (not coalesce(p.is_finished, false) and p.match_date >= current_date) AS is_upcoming_future,
+    cast(p.match_date - current_date as integer)                   AS days_to_kickoff,
+    case
+        when p.match_date = current_date and not coalesce(p.is_finished, false) then '1. Hôm nay'
+        when p.match_date = current_date + interval '1 day' and not coalesce(p.is_finished, false) then '2. Ngày mai'
+        when p.match_date > current_date and p.match_date <= current_date + interval '7 days' and not coalesce(p.is_finished, false) then '3. Trong 7 ngày tới'
+        when p.match_date > current_date + interval '7 days' and not coalesce(p.is_finished, false) then '4. Tương lai xa hơn'
+        else '5. Đã kết thúc / Quá khứ'
+    end                                                             AS fixture_timeline_group,
+
     p.p_home,
     p.p_draw,
     p.p_away,
@@ -62,12 +74,22 @@ LEFT JOIN dwh.dim_team ht ON ht.team_key = p.home_key
 LEFT JOIN dwh.dim_team at ON at.team_key = p.away_key;
 
 
--- 2. VIEW GIẢI THÍCH SHAP: Bảng dài phục vụ biểu đồ Bar Chart / Waterfall theo trận
+-- 2. VIEW CHUYÊN DỤNG: CÁC TRẬN ĐẤU SẮP DIỄN RA TỪ HÔM NAY TRỞ ĐI (UPCOMING FIXTURES)
+-- Dành riêng cho bảng Dashboard "Lịch thi đấu & Dự đoán tương lai"
+CREATE OR REPLACE VIEW dwh.v_upcoming_match_predictions AS
+SELECT *
+FROM dwh.v_match_predictions_dashboard
+WHERE is_upcoming_future = true OR split = 'predict'
+ORDER BY match_date ASC, kickoff_utc ASC;
+
+
+-- 3. VIEW GIẢI THÍCH SHAP: Bảng dạng dài phục vụ biểu đồ Bar Chart / Waterfall theo trận
 CREATE OR REPLACE VIEW dwh.v_match_shap_explainability AS
 SELECT
     s.match_key,
     v.match_fixture,
     v.match_date,
+    v.fixture_timeline_group,
     v.competition_name,
     v.home_team_name,
     v.away_team_name,
@@ -87,13 +109,14 @@ FROM dwh.mart_ml_prediction_shap_factors s
 JOIN dwh.v_match_predictions_dashboard v ON v.match_key = s.match_key;
 
 
--- 3. VIEW TỔNG HỢP HIỆU NĂNG MÔ HÌNH (MODEL PERFORMANCE KPI)
+-- 4. VIEW TỔNG HỢP HIỆU NĂNG MÔ HÌNH (MODEL PERFORMANCE KPI)
 CREATE OR REPLACE VIEW dwh.v_model_performance_kpi AS
 SELECT
     p.model_version,
     count(*)                                                        AS total_predictions,
     count(case when p.is_finished and p.actual_result is not null then 1 end) AS evaluated_matches,
     count(case when not p.is_finished or p.actual_result is null then 1 end)  AS upcoming_matches,
+    count(case when not coalesce(p.is_finished, false) and p.match_date >= current_date then 1 end) AS upcoming_from_today,
     round(
         cast(avg(case when p.is_finished and p.actual_result is not null then p.is_correct end) * 100 as numeric),
         2

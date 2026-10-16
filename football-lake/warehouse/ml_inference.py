@@ -555,6 +555,15 @@ class DWHStorageSink:
                 p.split,
                 p.is_finished,
                 p.actual_result,
+                (not coalesce(p.is_finished, false) and p.match_date >= current_date) as is_upcoming_future,
+                cast(p.match_date - current_date as integer) as days_to_kickoff,
+                case
+                    when p.match_date = current_date and not coalesce(p.is_finished, false) then '1. Hôm nay'
+                    when p.match_date = current_date + interval '1 day' and not coalesce(p.is_finished, false) then '2. Ngày mai'
+                    when p.match_date > current_date and p.match_date <= current_date + interval '7 days' and not coalesce(p.is_finished, false) then '3. Trong 7 ngày tới'
+                    when p.match_date > current_date + interval '7 days' and not coalesce(p.is_finished, false) then '4. Tương lai xa hơn'
+                    else '5. Đã kết thúc / Quá khứ'
+                end as fixture_timeline_group,
                 p.p_home,
                 p.p_draw,
                 p.p_away,
@@ -586,18 +595,29 @@ class DWHStorageSink:
             LEFT JOIN pg.{PG_SCHEMA}.dim_competition c ON c.competition_key = p.competition_key
             LEFT JOIN pg.{PG_SCHEMA}.dim_team ht ON ht.team_key = p.home_key
             LEFT JOIN pg.{PG_SCHEMA}.dim_team at ON at.team_key = p.away_key;
+
+            CREATE OR REPLACE VIEW pg.{PG_SCHEMA}.v_upcoming_match_predictions AS
+            SELECT *
+            FROM pg.{PG_SCHEMA}.v_match_predictions_dashboard
+            WHERE is_upcoming_future = true OR split = 'predict'
+            ORDER BY match_date ASC, kickoff_utc ASC;
             """
             con.execute(view_sql)
             logger.info("✓ Đã nạp thành công bảng PostgreSQL: %s.mart_ml_predictions (%d dòng)", PG_SCHEMA, len(pred_df))
             logger.info("✓ Đã nạp thành công bảng PostgreSQL: %s.mart_ml_prediction_shap_factors (%d dòng)", PG_SCHEMA, len(shap_df))
-            logger.info("✓ Đã tạo View Superset: %s.v_match_predictions_dashboard", PG_SCHEMA)
+            logger.info("✓ Đã tạo View Superset: %s.v_match_predictions_dashboard & v_upcoming_match_predictions", PG_SCHEMA)
         except Exception as e:
             logger.error("Lỗi khi ghi PostgreSQL: %s", e)
         finally:
             con.close()
 
 
-def run_pipeline(split_filter: Optional[str] = None, limit: Optional[int] = None) -> None:
+def run_pipeline(
+    split_filter: Optional[str] = None,
+    upcoming_only: bool = False,
+    from_date: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> None:
     """Hàm điều phối toàn bộ chu trình suy luận (Inference Pipeline)."""
     logger.info("==================================================================")
     logger.info("BẮT ĐẦU LUỒNG INFERENCE MÔ HÌNH DỰ ĐOÁN BÓNG ĐÁ (LIGHTGBM + SHAP)")
@@ -619,11 +639,21 @@ def run_pipeline(split_filter: Optional[str] = None, limit: Optional[int] = None
     logger.info("Đang đọc mart_ml_match_features từ: %s", source_path)
 
     try:
-        query = f"SELECT * FROM read_parquet('{source_path}')"
+        where_clauses = []
         if split_filter:
-            query += f" WHERE split = '{split_filter}'"
+            where_clauses.append(f"split = '{split_filter}'")
+        if upcoming_only:
+            where_clauses.append("(split = 'predict' OR (is_finished = false AND match_date >= current_date))")
+        if from_date:
+            where_clauses.append(f"match_date >= date '{from_date}'")
+
+        query = f"SELECT * FROM read_parquet('{source_path}')"
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
         if limit:
             query += f" LIMIT {limit}"
+
+        logger.info("Executing query: %s", query)
         df = con.execute(query).df()
     except Exception as e:
         logger.warning("Không đọc được MinIO S3 trực tiếp (%s). Đang thử đọc file cục bộ...", e)
@@ -669,7 +699,14 @@ def run_pipeline(split_filter: Optional[str] = None, limit: Optional[int] = None
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chạy luồng suy luận trận đấu và nạp DWH/Superset")
     parser.add_argument("--split", type=str, default=None, help="Lọc split (predict, test, valid, train)")
+    parser.add_argument("--upcoming-only", action="store_true", help="Chỉ dự đoán các trận tương lai chưa diễn ra (match_date >= hôm nay)")
+    parser.add_argument("--from-date", type=str, default=None, help="Chỉ định ngày bắt đầu lọc (YYYY-MM-DD)")
     parser.add_argument("--limit", type=int, default=None, help="Giới hạn số trận cần suy luận")
     args = parser.parse_args()
 
-    run_pipeline(split_filter=args.split, limit=args.limit)
+    run_pipeline(
+        split_filter=args.split,
+        upcoming_only=args.upcoming_only,
+        from_date=args.from_date,
+        limit=args.limit,
+    )
