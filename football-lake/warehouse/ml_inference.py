@@ -857,6 +857,13 @@ def run_pipeline(
     # 5. Lưu vào PostgreSQL DWH & View Superset
     DWHStorageSink.save_predictions(pred_df, shap_df)
 
+    # 6. Đồng bộ metadata huấn luyện, dataset & evaluation metrics từ MLflow vào DWH
+    try:
+        from warehouse.sync_model_metadata import sync_metadata
+        sync_metadata()
+    except Exception as e_meta:
+        logger.debug("Đồng bộ metadata huấn luyện bỏ qua: %s", e_meta)
+
     logger.info("==================================================================")
     logger.info("HOÀN THÀNH LUỒNG INFERENCE & SẴN SÀNG CHO SUPERSET DASHBOARD!")
     logger.info("==================================================================")

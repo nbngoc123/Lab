@@ -110,21 +110,88 @@ JOIN dwh.v_match_predictions_dashboard v ON v.match_key = s.match_key;
 
 
 -- 4. VIEW TỔNG HỢP HIỆU NĂNG MÔ HÌNH (MODEL PERFORMANCE KPI)
+-- Kết hợp cả Thống kê Offline Benchmark (Train/Val/Test) và Thống kê Live Production Inference
+DROP VIEW IF EXISTS dwh.v_model_performance_kpi CASCADE;
 CREATE OR REPLACE VIEW dwh.v_model_performance_kpi AS
 SELECT
-    p.model_version,
-    count(*)                                                        AS total_predictions,
-    count(case when p.is_finished and p.actual_result is not null then 1 end) AS evaluated_matches,
-    count(case when not p.is_finished or p.actual_result is null then 1 end)  AS upcoming_matches,
-    count(case when not coalesce(p.is_finished, false) and p.match_date >= current_date then 1 end) AS upcoming_from_today,
-    round(
-        cast(avg(case when p.is_finished and p.actual_result is not null then p.is_correct end) * 100 as numeric),
-        2
-    )                                                               AS accuracy_pct,
-    round(cast(avg(p.confidence) * 100 as numeric), 2)              AS avg_confidence_pct,
-    count(case when p.predicted_result_letter = 'H' then 1 end)     AS count_pred_home,
-    count(case when p.predicted_result_letter = 'D' then 1 end)     AS count_pred_draw,
-    count(case when p.predicted_result_letter = 'A' then 1 end)     AS count_pred_away,
-    max(p.predicted_at)                                             AS last_inference_time
-FROM dwh.mart_ml_predictions p
-GROUP BY p.model_version;
+    m.model_version,
+    m.model_name,
+    m.algorithm,
+    m.experiment_name,
+    m.run_id,
+    m.split_method,
+    m.dataset_source,
+    m.n_raw_samples,
+    m.n_filtered_samples,
+    m.n_train_samples,
+    m.n_validation_samples,
+    m.n_test_samples,
+    m.n_features,
+    m.train_date_range,
+    m.valid_date_range,
+    m.test_date_range,
+    m.learning_rate,
+    m.n_estimators,
+    m.draw_weight,
+    m.training_duration_sec,
+    -- Metrics đánh giá Offline Benchmark
+    m.test_accuracy_pct,
+    m.valid_accuracy_pct,
+    m.test_balanced_acc_pct,
+    m.test_macro_f1_pct,
+    m.test_weighted_f1_pct,
+    m.test_log_loss,
+    m.test_mcc,
+    m.test_home_precision_pct,
+    m.test_home_recall_pct,
+    m.test_home_f1_pct,
+    m.test_draw_precision_pct,
+    m.test_draw_recall_pct,
+    m.test_draw_f1_pct,
+    m.test_away_precision_pct,
+    m.test_away_recall_pct,
+    m.test_away_f1_pct,
+    -- Metrics suy luận Live Production
+    p.live_upcoming_matches,
+    p.live_pred_home,
+    p.live_pred_draw,
+    p.live_pred_away,
+    p.live_avg_confidence_pct,
+    p.last_inference_time
+FROM dwh.dim_ml_model_metadata m
+LEFT JOIN (
+    SELECT
+        model_version,
+        count(*) AS live_upcoming_matches,
+        count(CASE WHEN predicted_result_letter = 'H' THEN 1 END) AS live_pred_home,
+        count(CASE WHEN predicted_result_letter = 'D' THEN 1 END) AS live_pred_draw,
+        count(CASE WHEN predicted_result_letter = 'A' THEN 1 END) AS live_pred_away,
+        round(cast(avg(confidence) * 100 as numeric), 2) AS live_avg_confidence_pct,
+        max(predicted_at) AS last_inference_time
+    FROM dwh.mart_ml_predictions
+    GROUP BY model_version
+) p ON p.model_version = m.model_version;
+
+
+-- 5. VIEW BẢNG XẾP HẠNG ĐẶC TRƯNG QUAN TRỌNG (GLOBAL FEATURE IMPORTANCE)
+-- Phục vụ biểu đồ Bar Chart xếp hạng mức độ đóng góp toàn cục của 92 đặc trưng
+DROP VIEW IF EXISTS dwh.v_model_feature_importance CASCADE;
+CREATE OR REPLACE VIEW dwh.v_model_feature_importance AS
+SELECT
+    rank,
+    feature_name,
+    coalesce(feature_label, feature_name) as feature_label,
+    importance_score,
+    relative_pct
+FROM dwh.mart_ml_feature_importance
+ORDER BY rank ASC;
+
+
+-- 6. VIEW ĐÁNH GIÁ CHI TIẾT THEO TỪNG LỚP (PER-CLASS PRECISION / RECALL / F1)
+-- Phục vụ biểu đồ Radar hoặc Bar so sánh hiệu năng giữa tập Test và Validation
+DROP VIEW IF EXISTS dwh.v_model_class_metrics CASCADE;
+CREATE OR REPLACE VIEW dwh.v_model_class_metrics AS
+SELECT *
+FROM dwh.mart_ml_model_class_metrics
+ORDER BY split DESC, class_name ASC;
+
