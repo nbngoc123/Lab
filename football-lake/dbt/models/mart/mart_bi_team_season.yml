@@ -1,0 +1,414 @@
+version: 2
+
+models:
+  - name: mart_bi_team_season
+    description: >-
+      Mart BI đội theo giải/mùa, grain một dòng cho mỗi (competition_key, season, team_key).
+      Dependency duy nhất là ref('mart_bi_team_match'); không join dimension và không suy lại khóa/mùa/kết quả.
+      Giữ lịch trong matches_total; chỉ dùng has_result=true cho W/D/L, điểm, bàn thắng và mọi thống kê.
+      matches_finished khác matches_with_result: kết thúc nhưng thiếu tỷ số chưa được tính thành tích.
+      Count dùng match_key phân biệt; tổng chỉ số yêu cầu đầu vào duy nhất mỗi (match_key, team_key).
+      source_row_count phải bằng matches_total; test báo lỗi đầu vào trùng hoặc khóa trận NULL,
+      không tự chọn một bản ghi hoặc che xung đột. Test upstream đội-trận phải PASS trước khi dùng báo cáo.
+      Counts có thể bằng 0; tổng/điểm trung bình/tỷ lệ không có quan sát giữ NULL, không lấp 0.
+      Mỗi chỉ số nullable có số quan sát; tổng xG và xGA riêng có thể khác coverage.
+      xg_difference_total là SUM hiệu xG từng trận đủ cả hai phía, không trừ hai tổng khác tập quan sát.
+      goals_minus_xg_total cũng dùng chênh lệch từng trận từ upstream.
+      shot_accuracy và PPDA dùng SUM tử/SUM mẫu trên cùng tập trận đủ hai thành phần;
+      quan sát mẫu số 0 vẫn được đếm, tổng mẫu 0 cho tỷ lệ NULL.
+      Không dùng các tỷ lệ từng trận hoặc trung bình sân nhà/khách để tính trung bình toàn mùa.
+      home_/away_ theo side h/a của fixture, không khẳng định lợi thế sân thực tế ở sân trung lập.
+      Khi gom nhiều đội/giải/mùa trong Superset, tính lại tỷ lệ từ tổng tử và mẫu tương ứng.
+      Một trận thuộc hai đội; SUM(matches_total) toàn bảng là số lượt đội-trận, không phải số trận duy nhất.
+      Mùa đang diễn ra là season-to-date, không phải thành tích cuối mùa; dữ liệu có thể chưa phủ đủ giải.
+      Model upstream mới được kiểm thử trong sandbox, chưa có Parquet BI chính thức.
+      Khi kiểm thử cần chọn đồng thời mart_bi_team_match và mart_bi_team_season trong cùng lượt
+      dbt build với profile sandbox đã xác minh, external_root chỉ trỏ sandbox riêng;
+      không chạy riêng season trên profile mặc định vì hook có thể tìm upstream ở MinIO chính thức.
+      Nếu upstream Parquet Core cần cho lượt build không có trong sandbox, phải chuẩn bị bản đọc
+      đã được cho phép trước, không tự rebuild Core hay chuyển sang output chính thức.
+      Không chạy pipeline chỉ để review hai file này.
+      Materialization external và macro hiện tại ghi dwh/mart_bi_team_season.parquet;
+      chỉ là vị trí theo profile mặc định, không phải đích được phép dùng để kiểm thử.
+      COALESCE trong test đối soát home/away chỉ quy phần không có kết quả về 0 để so tổng;
+      SQL đầu ra không thay dữ liệu thiếu bằng 0.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [competition_key, season, team_key]
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_source_has_one_row_per_match
+          expression: >-
+            coalesce((source_row_count = matches_total and matches_total > 0), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_match_counts
+          expression: >-
+            coalesce((matches_total >= 0
+            and matches_finished between 0 and matches_total
+            and matches_with_result between 0 and matches_finished
+            and matches_without_result = matches_total - matches_with_result
+            and wins >= 0 and draws >= 0 and losses >= 0
+            and wins + draws + losses = matches_with_result), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_result_totals
+          expression: >-
+            coalesce(((matches_with_result = 0
+             and points_total is null and goals_for_total is null
+             and goals_against_total is null and goal_difference_total is null)
+            or (matches_with_result > 0
+             and points_total is not null and goals_for_total is not null
+             and goals_against_total is not null and goal_difference_total is not null
+             and points_total = 3 * wins + draws
+             and goal_difference_total = goals_for_total - goals_against_total)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_result_rates
+          expression: >-
+            coalesce(((matches_with_result = 0
+             and points_per_match is null and win_rate is null)
+            or (matches_with_result > 0
+             and points_per_match is not null and win_rate is not null
+             and abs(points_per_match * matches_with_result - points_total) < 0.00000001
+             and abs(win_rate * matches_with_result - wins) < 0.00000001)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_home_match_counts
+          expression: >-
+            coalesce((home_matches_total >= 0
+            and home_matches_finished between 0 and home_matches_total
+            and home_matches_with_result between 0 and home_matches_finished
+            and home_matches_without_result = home_matches_total - home_matches_with_result
+            and home_wins >= 0 and home_draws >= 0 and home_losses >= 0
+            and home_wins + home_draws + home_losses = home_matches_with_result), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_home_result_totals
+          expression: >-
+            coalesce(((home_matches_with_result = 0
+             and home_points_total is null and home_goals_for_total is null
+             and home_goals_against_total is null and home_goal_difference_total is null)
+            or (home_matches_with_result > 0
+             and home_points_total is not null and home_goals_for_total is not null
+             and home_goals_against_total is not null and home_goal_difference_total is not null
+             and home_points_total = 3 * home_wins + home_draws
+             and home_goal_difference_total = home_goals_for_total - home_goals_against_total)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_home_result_rates
+          expression: >-
+            coalesce(((home_matches_with_result = 0
+             and home_points_per_match is null and home_win_rate is null)
+            or (home_matches_with_result > 0
+             and home_points_per_match is not null and home_win_rate is not null
+             and abs(home_points_per_match * home_matches_with_result - home_points_total) < 0.00000001
+             and abs(home_win_rate * home_matches_with_result - home_wins) < 0.00000001)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_away_match_counts
+          expression: >-
+            coalesce((away_matches_total >= 0
+            and away_matches_finished between 0 and away_matches_total
+            and away_matches_with_result between 0 and away_matches_finished
+            and away_matches_without_result = away_matches_total - away_matches_with_result
+            and away_wins >= 0 and away_draws >= 0 and away_losses >= 0
+            and away_wins + away_draws + away_losses = away_matches_with_result), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_away_result_totals
+          expression: >-
+            coalesce(((away_matches_with_result = 0
+             and away_points_total is null and away_goals_for_total is null
+             and away_goals_against_total is null and away_goal_difference_total is null)
+            or (away_matches_with_result > 0
+             and away_points_total is not null and away_goals_for_total is not null
+             and away_goals_against_total is not null and away_goal_difference_total is not null
+             and away_points_total = 3 * away_wins + away_draws
+             and away_goal_difference_total = away_goals_for_total - away_goals_against_total)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_away_result_rates
+          expression: >-
+            coalesce(((away_matches_with_result = 0
+             and away_points_per_match is null and away_win_rate is null)
+            or (away_matches_with_result > 0
+             and away_points_per_match is not null and away_win_rate is not null
+             and abs(away_points_per_match * away_matches_with_result - away_points_total) < 0.00000001
+             and abs(away_win_rate * away_matches_with_result - away_wins) < 0.00000001)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_home_away_counts_reconcile
+          expression: >-
+            coalesce((matches_total = home_matches_total + away_matches_total
+            and matches_finished = home_matches_finished + away_matches_finished
+            and matches_with_result = home_matches_with_result + away_matches_with_result
+            and matches_without_result = home_matches_without_result + away_matches_without_result
+            and wins = home_wins + away_wins
+            and draws = home_draws + away_draws
+            and losses = home_losses + away_losses), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_home_away_totals_reconcile
+          expression: >-
+            coalesce((coalesce(points_total, 0) = coalesce(home_points_total, 0) + coalesce(away_points_total, 0)
+            and coalesce(goals_for_total, 0) = coalesce(home_goals_for_total, 0) + coalesce(away_goals_for_total, 0)
+            and coalesce(goals_against_total, 0) = coalesce(home_goals_against_total, 0) + coalesce(away_goals_against_total, 0)
+            and coalesce(goal_difference_total, 0) = coalesce(home_goal_difference_total, 0) + coalesce(away_goal_difference_total, 0)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_statistic_coverage_and_nulls
+          expression: >-
+            coalesce(((xg_for_observations between 0 and matches_with_result
+             and ((xg_for_observations = 0 and xg_for_total is null)
+                  or (xg_for_observations > 0 and xg_for_total is not null)))
+            and (xg_against_observations between 0 and matches_with_result
+             and ((xg_against_observations = 0 and xg_against_total is null)
+                  or (xg_against_observations > 0 and xg_against_total is not null)))
+            and (xg_difference_observations between 0 and matches_with_result
+             and ((xg_difference_observations = 0 and xg_difference_total is null)
+                  or (xg_difference_observations > 0 and xg_difference_total is not null)))
+            and (goals_minus_xg_observations between 0 and matches_with_result
+             and ((goals_minus_xg_observations = 0 and goals_minus_xg_total is null)
+                  or (goals_minus_xg_observations > 0 and goals_minus_xg_total is not null)))
+            and (shots_observations between 0 and matches_with_result
+             and ((shots_observations = 0 and shots_total is null)
+                  or (shots_observations > 0 and shots_total is not null)))
+            and (shots_target_observations between 0 and matches_with_result
+             and ((shots_target_observations = 0 and shots_target_total is null)
+                  or (shots_target_observations > 0 and shots_target_total is not null)))
+            and (corners_observations between 0 and matches_with_result
+             and ((corners_observations = 0 and corners_total is null)
+                  or (corners_observations > 0 and corners_total is not null)))
+            and (fouls_observations between 0 and matches_with_result
+             and ((fouls_observations = 0 and fouls_total is null)
+                  or (fouls_observations > 0 and fouls_total is not null)))
+            and (yellows_observations between 0 and matches_with_result
+             and ((yellows_observations = 0 and yellows_total is null)
+                  or (yellows_observations > 0 and yellows_total is not null)))
+            and (reds_observations between 0 and matches_with_result
+             and ((reds_observations = 0 and reds_total is null)
+                  or (reds_observations > 0 and reds_total is not null)))
+            and (deep_observations between 0 and matches_with_result
+             and ((deep_observations = 0 and deep_total is null)
+                  or (deep_observations > 0 and deep_total is not null)))
+            and (deep_allowed_observations between 0 and matches_with_result
+             and ((deep_allowed_observations = 0 and deep_allowed_total is null)
+                  or (deep_allowed_observations > 0 and deep_allowed_total is not null)))
+            and (xpts_observations between 0 and matches_with_result
+             and ((xpts_observations = 0 and xpts_total is null)
+                  or (xpts_observations > 0 and xpts_total is not null)))
+            and (npxg_observations between 0 and matches_with_result
+             and ((npxg_observations = 0 and npxg_total is null)
+                  or (npxg_observations > 0 and npxg_total is not null)))
+            and (npxga_observations between 0 and matches_with_result
+             and ((npxga_observations = 0 and npxga_total is null)
+                  or (npxga_observations > 0 and npxga_total is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_shot_pair_coverage
+          expression: >-
+            coalesce((shot_accuracy_observations between 0 and matches_with_result
+            and shot_accuracy_observations <= shots_observations
+            and shot_accuracy_observations <= shots_target_observations), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_ppda_pair_coverage
+          expression: >-
+            coalesce((ppda_observations between 0 and matches_with_result), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_shot_accuracy_paired_ratio
+          expression: >-
+            coalesce(((shot_accuracy_observations = 0
+             and shot_accuracy_numerator_total is null and shot_accuracy_denominator_total is null
+             and shot_accuracy is null)
+            or (shot_accuracy_observations > 0
+             and shot_accuracy_numerator_total is not null and shot_accuracy_denominator_total is not null
+             and ((shot_accuracy_denominator_total = 0 and shot_accuracy is null)
+                  or (shot_accuracy_denominator_total <> 0 and shot_accuracy is not null
+                      and abs(shot_accuracy * shot_accuracy_denominator_total - shot_accuracy_numerator_total) < 0.00000001)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_ppda_paired_ratio
+          expression: >-
+            coalesce(((ppda_observations = 0
+             and ppda_numerator_total is null and ppda_denominator_total is null
+             and ppda is null)
+            or (ppda_observations > 0
+             and ppda_numerator_total is not null and ppda_denominator_total is not null
+             and ((ppda_denominator_total = 0 and ppda is null)
+                  or (ppda_denominator_total <> 0 and ppda is not null
+                      and abs(ppda * ppda_denominator_total - ppda_numerator_total) < 0.00000001)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_team_season_observed_match_averages
+          expression: >-
+            coalesce((((xg_for_observations = 0 and xg_for_per_match is null)
+             or (xg_for_observations > 0 and xg_for_per_match is not null
+                 and abs(xg_for_per_match * xg_for_observations - xg_for_total) < 0.00000001))
+            and ((xg_against_observations = 0 and xg_against_per_match is null)
+             or (xg_against_observations > 0 and xg_against_per_match is not null
+                 and abs(xg_against_per_match * xg_against_observations - xg_against_total) < 0.00000001))
+            and ((shots_observations = 0 and shots_per_match is null)
+             or (shots_observations > 0 and shots_per_match is not null
+                 and abs(shots_per_match * shots_observations - shots_total) < 0.00000001))
+            and ((shots_target_observations = 0 and shots_target_per_match is null)
+             or (shots_target_observations > 0 and shots_target_per_match is not null
+                 and abs(shots_target_per_match * shots_target_observations - shots_target_total) < 0.00000001))), false)
+    columns:
+      - name: competition_key
+        description: "Khóa giải kế thừa Core; thành phần grain, không suy lại hoặc lọc bỏ nhóm thiếu khóa."
+        tests: [not_null]
+      - name: season
+        description: "Năm bắt đầu mùa theo Core; không suy lại từ ngày trận."
+        tests: [not_null]
+      - name: team_key
+        description: "Khóa đội; thành phần grain, có thể liên kết dim_team.team_key."
+        tests: [not_null]
+      - name: source_row_count
+        description: "Số dòng Mart đội-trận trong nhóm; phải bằng matches_total. Chênh lệch báo trùng match_key hoặc khóa trận NULL, không âm thầm dedup."
+      - name: matches_total
+        description: "Toàn bộ sân: Số match_key phân biệt, gồm cả lịch chưa có kết quả."
+      - name: matches_finished
+        description: "Toàn bộ sân: Số trận phân biệt is_finished=true; có thể chưa đủ tỷ số."
+      - name: matches_with_result
+        description: "Toàn bộ sân: Số trận phân biệt has_result=true; mẫu số của thành tích."
+      - name: matches_without_result
+        description: "Toàn bộ sân: Số trận phân biệt has_result=false, gồm cả chưa kết thúc và đã kết thúc nhưng thiếu tỷ số."
+      - name: wins
+        description: "Toàn bộ sân: Số trận đủ kết quả với team_result=W; 0 khi không có trận thắng."
+      - name: draws
+        description: "Toàn bộ sân: Số trận đủ kết quả với team_result=D; 0 khi không có trận hòa."
+      - name: losses
+        description: "Toàn bộ sân: Số trận đủ kết quả với team_result=L; 0 khi không có trận thua."
+      - name: points_total
+        description: "Toàn bộ sân: SUM(points) trên has_result=true; NULL khi chưa có kết quả, 0 là tổng điểm quan sát được."
+      - name: points_per_match
+        description: "Toàn bộ sân: points_total/matches_with_result; NULL khi mẫu số bằng 0. Không dùng lịch chưa có kết quả."
+      - name: win_rate
+        description: "Toàn bộ sân: wins/matches_with_result, tỷ lệ không nhân 100; NULL khi chưa có kết quả."
+      - name: goals_for_total
+        description: "Toàn bộ sân: SUM(goals_for) trên has_result=true; NULL khi chưa có kết quả."
+      - name: goals_against_total
+        description: "Toàn bộ sân: SUM(goals_against) trên has_result=true; NULL khi chưa có kết quả."
+      - name: goal_difference_total
+        description: "Toàn bộ sân: SUM(goal_difference) từ Mart đội-trận trên has_result=true; NULL khi chưa có kết quả."
+      - name: home_matches_total
+        description: "Sân nhà: Số match_key phân biệt, gồm cả lịch chưa có kết quả."
+      - name: home_matches_finished
+        description: "Sân nhà: Số trận phân biệt is_finished=true; có thể chưa đủ tỷ số."
+      - name: home_matches_with_result
+        description: "Sân nhà: Số trận phân biệt has_result=true; mẫu số của thành tích."
+      - name: home_matches_without_result
+        description: "Sân nhà: Số trận phân biệt has_result=false, gồm cả chưa kết thúc và đã kết thúc nhưng thiếu tỷ số."
+      - name: home_wins
+        description: "Sân nhà: Số trận đủ kết quả với team_result=W; 0 khi không có trận thắng."
+      - name: home_draws
+        description: "Sân nhà: Số trận đủ kết quả với team_result=D; 0 khi không có trận hòa."
+      - name: home_losses
+        description: "Sân nhà: Số trận đủ kết quả với team_result=L; 0 khi không có trận thua."
+      - name: home_points_total
+        description: "Sân nhà: SUM(points) trên has_result=true; NULL khi chưa có kết quả, 0 là tổng điểm quan sát được."
+      - name: home_points_per_match
+        description: "Sân nhà: points_total/matches_with_result; NULL khi mẫu số bằng 0. Không dùng lịch chưa có kết quả."
+      - name: home_win_rate
+        description: "Sân nhà: wins/matches_with_result, tỷ lệ không nhân 100; NULL khi chưa có kết quả."
+      - name: home_goals_for_total
+        description: "Sân nhà: SUM(goals_for) trên has_result=true; NULL khi chưa có kết quả."
+      - name: home_goals_against_total
+        description: "Sân nhà: SUM(goals_against) trên has_result=true; NULL khi chưa có kết quả."
+      - name: home_goal_difference_total
+        description: "Sân nhà: SUM(goal_difference) từ Mart đội-trận trên has_result=true; NULL khi chưa có kết quả."
+      - name: away_matches_total
+        description: "Sân khách: Số match_key phân biệt, gồm cả lịch chưa có kết quả."
+      - name: away_matches_finished
+        description: "Sân khách: Số trận phân biệt is_finished=true; có thể chưa đủ tỷ số."
+      - name: away_matches_with_result
+        description: "Sân khách: Số trận phân biệt has_result=true; mẫu số của thành tích."
+      - name: away_matches_without_result
+        description: "Sân khách: Số trận phân biệt has_result=false, gồm cả chưa kết thúc và đã kết thúc nhưng thiếu tỷ số."
+      - name: away_wins
+        description: "Sân khách: Số trận đủ kết quả với team_result=W; 0 khi không có trận thắng."
+      - name: away_draws
+        description: "Sân khách: Số trận đủ kết quả với team_result=D; 0 khi không có trận hòa."
+      - name: away_losses
+        description: "Sân khách: Số trận đủ kết quả với team_result=L; 0 khi không có trận thua."
+      - name: away_points_total
+        description: "Sân khách: SUM(points) trên has_result=true; NULL khi chưa có kết quả, 0 là tổng điểm quan sát được."
+      - name: away_points_per_match
+        description: "Sân khách: points_total/matches_with_result; NULL khi mẫu số bằng 0. Không dùng lịch chưa có kết quả."
+      - name: away_win_rate
+        description: "Sân khách: wins/matches_with_result, tỷ lệ không nhân 100; NULL khi chưa có kết quả."
+      - name: away_goals_for_total
+        description: "Sân khách: SUM(goals_for) trên has_result=true; NULL khi chưa có kết quả."
+      - name: away_goals_against_total
+        description: "Sân khách: SUM(goals_against) trên has_result=true; NULL khi chưa có kết quả."
+      - name: away_goal_difference_total
+        description: "Sân khách: SUM(goal_difference) từ Mart đội-trận trên has_result=true; NULL khi chưa có kết quả."
+      - name: xg_for_total
+        description: "xG của đội: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: xg_for_observations
+        description: "xG của đội: COUNT(xg_for) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: xg_against_total
+        description: "xG của đối thủ: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: xg_against_observations
+        description: "xG của đối thủ: COUNT(xg_against) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: xg_difference_total
+        description: "Hiệu xG từng trận (chỉ trận có đủ hai phía): SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: xg_difference_observations
+        description: "Hiệu xG từng trận (chỉ trận có đủ hai phía): COUNT(xg_difference) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: goals_minus_xg_total
+        description: "Bàn ghi trừ xG từng trận (cùng tập trận có xG của đội): SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: goals_minus_xg_observations
+        description: "Bàn ghi trừ xG từng trận (cùng tập trận có xG của đội): COUNT(goals_minus_xg) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: shots_total
+        description: "Cú sút: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: shots_observations
+        description: "Cú sút: COUNT(shots) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: shots_target_total
+        description: "Cú sút trúng đích: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: shots_target_observations
+        description: "Cú sút trúng đích: COUNT(shots_target) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: corners_total
+        description: "Phạt góc: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: corners_observations
+        description: "Phạt góc: COUNT(corners) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: fouls_total
+        description: "Phạm lỗi: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: fouls_observations
+        description: "Phạm lỗi: COUNT(fouls) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: yellows_total
+        description: "Thẻ vàng: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: yellows_observations
+        description: "Thẻ vàng: COUNT(yellows) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: reds_total
+        description: "Thẻ đỏ: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: reds_observations
+        description: "Thẻ đỏ: COUNT(reds) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: deep_total
+        description: "Deep Understat: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: deep_observations
+        description: "Deep Understat: COUNT(deep) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: deep_allowed_total
+        description: "Deep allowed Understat: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: deep_allowed_observations
+        description: "Deep allowed Understat: COUNT(deep_allowed) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: xpts_total
+        description: "Điểm kỳ vọng Understat: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: xpts_observations
+        description: "Điểm kỳ vọng Understat: COUNT(xpts) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: npxg_total
+        description: "xG không penalty của đội: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: npxg_observations
+        description: "xG không penalty của đội: COUNT(npxg) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: npxga_total
+        description: "xG không penalty của đối thủ: SUM trên các trận has_result=true có giá trị không NULL; NULL nếu không có quan sát. Đây là tổng phần được phủ dữ liệu, không bảo đảm phủ cả mùa."
+      - name: npxga_observations
+        description: "xG không penalty của đối thủ: COUNT(npxga) trên has_result=true, kể cả giá trị 0; bằng 0 khi không có quan sát. Không dùng tổng số trận làm mẫu số mặc định."
+      - name: xg_for_per_match
+        description: "xg_for_total/xg_for_observations; trung bình trên trận có dữ liệu, NULL khi chưa có quan sát."
+      - name: xg_against_per_match
+        description: "xg_against_total/xg_against_observations; trung bình trên trận có dữ liệu, NULL khi chưa có quan sát."
+      - name: shots_per_match
+        description: "shots_total/shots_observations; trung bình trên trận có dữ liệu, NULL khi chưa có quan sát."
+      - name: shots_target_per_match
+        description: "shots_target_total/shots_target_observations; trung bình trên trận có dữ liệu, NULL khi chưa có quan sát."
+      - name: shot_accuracy_numerator_total
+        description: "Độ chính xác cú sút: SUM(shots_target) trên has_result=true và cả shots_target/shots không NULL; cùng tập trận với mẫu số."
+      - name: shot_accuracy_denominator_total
+        description: "Độ chính xác cú sút: SUM(shots) trên đúng tập trận của tử số; giữ cả quan sát mẫu số 0."
+      - name: shot_accuracy_observations
+        description: "Độ chính xác cú sút: số trận đủ kết quả và đủ hai thành phần, kể cả mẫu số 0; 0 là không có quan sát."
+      - name: shot_accuracy
+        description: "Độ chính xác cú sút: tổng tử/tổng mẫu cùng tập trận, không AVG tỷ lệ từng trận; NULL khi thiếu quan sát hoặc tổng mẫu bằng 0. Tỷ lệ không nhân 100."
+      - name: ppda_numerator_total
+        description: "PPDA: SUM(ppda_att) trên has_result=true và cả ppda_att/ppda_def không NULL; cùng tập trận với mẫu số."
+      - name: ppda_denominator_total
+        description: "PPDA: SUM(ppda_def) trên đúng tập trận của tử số; giữ cả quan sát mẫu số 0."
+      - name: ppda_observations
+        description: "PPDA: số trận đủ kết quả và đủ hai thành phần, kể cả mẫu số 0; 0 là không có quan sát."
+      - name: ppda
+        description: "PPDA: tổng tử/tổng mẫu cùng tập trận, không AVG tỷ lệ từng trận; NULL khi thiếu quan sát hoặc tổng mẫu bằng 0."
