@@ -23,8 +23,18 @@ with DAG(
 
     @task(outlets=[asset_raw])
     def task_ingest(partition: dict):
-        from pipelines.p08.main import ingest
-        return ingest(partition)
+        import logging
+        from airflow.exceptions import AirflowSkipException
+        logger = logging.getLogger("airflow.task")
+        try:
+            from pipelines.p08.main import ingest
+            return ingest(partition)
+        except Exception as e:
+            logger.warning(
+                "Nguồn TheSportsDB là nguồn phụ và hiện đang gặp sự cố (%s). Bỏ qua partition %s.",
+                e, partition
+            )
+            raise AirflowSkipException(f"TheSportsDB API không khả dụng ({e}). Bỏ qua partition này.")
 
     partitions = task_get_partitions()
     ingest_tasks = task_ingest.expand(partition=partitions)

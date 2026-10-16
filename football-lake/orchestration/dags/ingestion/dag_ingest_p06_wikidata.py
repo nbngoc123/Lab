@@ -1,9 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.decorators import task
 from airflow.sdk import Asset
 
 asset_wikidata_raw = Asset("minio://football-lake/raw/wikidata")
+
+default_args = {
+    "pool": "ingestion_pool",
+    "retries": 2,
+    "retry_delay": timedelta(minutes=2),
+}
 
 with DAG(
     dag_id="dag_ingest_p06_wikidata",
@@ -11,7 +17,7 @@ with DAG(
     schedule='@daily',
     catchup=False,
     max_active_runs=1,
-    default_args={"pool": "ingestion_pool"},
+    default_args=default_args,
     max_active_tasks=2,
     tags=["ingestion", "bronze", "wikidata"],
 ) as dag:
