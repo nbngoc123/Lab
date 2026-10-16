@@ -26,13 +26,13 @@ SELECT
     p.actual_result,
     
     -- ===== PHÂN LOẠI TIMELINE THEO NGÀY HÔM NAY (CURRENT_DATE) =====
-    (not coalesce(p.is_finished, false) and p.match_date >= current_date) AS is_upcoming_future,
-    cast(p.match_date - current_date as integer)                   AS days_to_kickoff,
+    (not coalesce(p.is_finished, false) and cast(p.match_date as date) >= current_date) AS is_upcoming_future,
+    (cast(p.match_date as date) - current_date)                    AS days_to_kickoff,
     case
-        when p.match_date = current_date and not coalesce(p.is_finished, false) then '1. Hôm nay'
-        when p.match_date = current_date + interval '1 day' and not coalesce(p.is_finished, false) then '2. Ngày mai'
-        when p.match_date > current_date and p.match_date <= current_date + interval '7 days' and not coalesce(p.is_finished, false) then '3. Trong 7 ngày tới'
-        when p.match_date > current_date + interval '7 days' and not coalesce(p.is_finished, false) then '4. Tương lai xa hơn'
+        when cast(p.match_date as date) = current_date and not coalesce(p.is_finished, false) then '1. Hôm nay'
+        when cast(p.match_date as date) = current_date + 1 and not coalesce(p.is_finished, false) then '2. Ngày mai'
+        when cast(p.match_date as date) > current_date and cast(p.match_date as date) <= current_date + 7 and not coalesce(p.is_finished, false) then '3. Trong 7 ngày tới'
+        when cast(p.match_date as date) > current_date + 7 and not coalesce(p.is_finished, false) then '4. Tương lai xa hơn'
         else '5. Đã kết thúc / Quá khứ'
     end                                                             AS fixture_timeline_group,
 

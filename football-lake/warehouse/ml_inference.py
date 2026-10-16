@@ -118,18 +118,25 @@ def form_to_points(form: Any) -> float:
 class MLflowModelFetcher:
     """Tải và đồng bộ Model từ MLflow Server qua Tailscale, có bộ đệm cục bộ (Cache)."""
 
-    def __init__(self, tracking_uri: str = DEFAULT_MLFLOW_URI, experiment_name: str = DEFAULT_EXPERIMENT):
+    def __init__(
+        self,
+        tracking_uri: str = DEFAULT_MLFLOW_URI,
+        experiment_name: str = DEFAULT_EXPERIMENT,
+        registered_model_name: str = "football_match_predictor",
+        model_alias: str = "champion",
+    ):
         self.tracking_uri = tracking_uri.rstrip("/")
         self.experiment_name = experiment_name
+        self.registered_model_name = registered_model_name
+        self.model_alias = model_alias
         self.cache_dir = CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def is_server_reachable(self, timeout: int = 4) -> bool:
+    def is_server_reachable(self, timeout: int = 5) -> bool:
         """Kiểm tra máy chủ MLflow qua Tailscale có phản hồi HTTP không."""
         try:
-            req = urllib.request.Request(f"{self.tracking_uri}/api/2.0/mlflow/experiments/search", method="POST")
-            req.add_header("Content-Type", "application/json")
-            with urllib.request.urlopen(req, data=b"{}", timeout=timeout) as resp:
+            req = urllib.request.Request(f"{self.tracking_uri}/health")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.status == 200
         except Exception:
             return False
@@ -175,77 +182,199 @@ class MLflowModelFetcher:
 
     def load_model_and_features(self) -> Tuple[Any, List[str], Dict[str, Any]]:
         """
-        Tải mô hình và danh sách feature.
-        Nếu kết nối MLflow qua Tailscale thành công -> Tải và cập nhật Cache.
-        Nếu không -> Nạp từ Cache cục bộ hoặc khởi tạo baseline dự phòng.
+        Nạp mô hình theo chuẩn MLOps Registry Lifecycle (Không hardcode ID):
+        1. Tìm Registered Model theo Tên ('football_match_predictor') và Alias ('@champion' / '@production').
+        2. Tự động lấy Version hiện tại, Run ID và đường dẫn Artifact binary (model.pkl).
+        3. Tự động đồng bộ danh sách 92 features (feature_names.json).
+        4. Tự động cache cục bộ để phục vụ offline / fallback an toàn nếu mất mạng.
         """
+        cached_pkl_path = self.cache_dir / "model.pkl"
         cached_model_path = self.cache_dir / "lightgbm_model.txt"
         cached_features_path = self.cache_dir / "feature_names.json"
-        cached_meta_path = self.cache_dir / "training_metadata.json"
 
-        # Thử tải từ MLflow Server
-        run = self.fetch_latest_run_metadata()
-        if run:
-            run_id = run["info"]["run_id"]
-            logger.info("Đã kết nối MLflow qua Tailscale! Run mới nhất: %s", run_id)
-            # Thử kéo artifact feature_names.json và model
+        synced_from_mlflow = False
+        target_version_info = None
+
+        # 1. Truy vấn động Model Registry trên MLflow
+        if self.is_server_reachable():
             try:
-                feat_url = f"{self.tracking_uri}/get-artifact?path=feature_names.json&run_uuid={run_id}"
-                with urllib.request.urlopen(feat_url, timeout=10) as resp:
-                    features = json.loads(resp.read().decode("utf-8"))
-                    with open(cached_features_path, "w", encoding="utf-8") as f:
-                        json.dump(features, f, indent=2)
-                    logger.info("Đã đồng bộ %d feature names từ MLflow.", len(features))
-            except Exception as e:
-                logger.warning("Không tải được feature_names từ MLflow artifact: %s", e)
+                # Truy vấn theo Alias (@champion)
+                alias_url = f"{self.tracking_uri}/api/2.0/mlflow/registered-models/alias?name={urllib.parse.quote(self.registered_model_name)}&alias={self.model_alias}"
+                req = urllib.request.Request(alias_url)
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    target_version_info = data.get("model_version")
 
-        # Kiểm tra cache
+                if target_version_info:
+                    version = target_version_info.get("version")
+                    run_id = target_version_info.get("run_id")
+                    source = target_version_info.get("source", "")
+                    logger.info("✓ MLflow Registry: Model '%s' [@%s] -> Version %s (Run: %s)", self.registered_model_name, self.model_alias, version, run_id)
+
+                    # Đồng bộ 92 features từ Run tương ứng
+                    try:
+                        feat_url = f"{self.tracking_uri}/get-artifact?path=feature_names.json&run_uuid={run_id}"
+                        with urllib.request.urlopen(feat_url, timeout=5) as r:
+                            features = json.loads(r.read().decode("utf-8"))
+                            with open(cached_features_path, "w", encoding="utf-8") as f:
+                                json.dump(features, f, indent=2)
+                            logger.info("✓ Đã đồng bộ %d features từ Run %s", len(features), run_id)
+                    except Exception as fe:
+                        logger.warning("Chưa đồng bộ được feature_names từ Run: %s", fe)
+
+                    # Tải binary model.pkl động hoàn toàn từ artifact_uri của MLflow
+                    if "models/" in source:
+                        m_id = source.split("models/")[-1]
+                        try:
+                            # Lấy artifact_uri chuẩn từ MLflow Server (không đoán mò experiment_id)
+                            lm_url = f"{self.tracking_uri}/api/2.0/mlflow/logged-models/{m_id}"
+                            with urllib.request.urlopen(lm_url, timeout=5) as r:
+                                lm_data = json.loads(r.read().decode("utf-8"))
+                                art_uri = lm_data.get("model", {}).get("info", {}).get("artifact_uri", "")
+
+                            if art_uri:
+                                # Chuyển artifact_uri dạng 'mlflow-artifacts:/<exp>/models/<m_id>/artifacts' thành URL tải
+                                clean_path = art_uri.replace("mlflow-artifacts:/", "").strip("/")
+                                model_download_url = f"{self.tracking_uri}/api/2.0/mlflow-artifacts/artifacts/{clean_path}/model.pkl"
+                                urllib.request.urlretrieve(model_download_url, cached_pkl_path)
+                                logger.info("✓ Tự động tải thành công model.pkl Version %s (%d bytes) từ MLflow!", version, cached_pkl_path.stat().st_size)
+                                synced_from_mlflow = True
+                        except Exception as me:
+                            logger.warning("Lỗi khi tải model.pkl động: %s", me)
+            except Exception as e:
+                logger.warning("Không truy vấn được MLflow Model Registry: %s", e)
+
+        # 2. Nạp danh sách feature
         if cached_features_path.exists():
             with open(cached_features_path, "r", encoding="utf-8") as f:
                 feature_names = json.load(f)
         else:
             feature_names = []
 
-        # Tải hoặc khởi tạo model
-        model = self._load_or_create_model(cached_model_path, feature_names)
-        return model, feature_names, {"source": "mlflow" if run else "local_cache"}
+        # 3. Nạp Model thật (Ưu tiên model.pkl -> text model -> Fallback)
+        model = None
+        if cached_pkl_path.exists():
+            try:
+                import pickle
+                with open(cached_pkl_path, "rb") as f:
+                    model = pickle.load(f)
+                logger.info("✓ ĐÃ NẠP THÀNH CÔNG MODEL LIGHTGBM THẬT (LGBMClassifier) từ cache: %s", cached_pkl_path)
+            except Exception as e:
+                logger.warning("Lỗi unpickle model.pkl: %s", e)
 
-    def _load_or_create_model(self, model_path: Path, feature_names: List[str]) -> Any:
-        """Nạp model từ file text LightGBM, hoặc khởi tạo LightGBM Classifier."""
-        try:
-            import lightgbm as lgb
-            if model_path.exists():
-                logger.info("Nạp LightGBM model từ cache: %s", model_path)
-                booster = lgb.Booster(model_file=str(model_path))
-                return booster
-        except ImportError:
-            logger.warning("Thư viện lightgbm chưa cài đặt trong môi trường này. Sử dụng Fallback Engine.")
+        if model is None and cached_model_path.exists():
+            try:
+                import lightgbm as lgb
+                model = lgb.Booster(model_file=str(cached_model_path))
+                logger.info("✓ Đã nạp LightGBM Booster từ file text: %s", cached_model_path)
+            except Exception as e:
+                logger.warning("Lỗi nạp text model: %s", e)
 
-        # Fallback Engine (giúp luồng suy luận luôn hoạt động ngay cả khi môi trường tối giản)
+        if model is None:
+            logger.warning("Sử dụng Fallback Engine định lượng do chưa có binary.")
+            model = self._create_fallback_engine(feature_names)
+
+        # Nhãn phiên bản lấy 100% động từ MLflow Registry
+        actual_ver = target_version_info.get("version") if target_version_info else None
+        if actual_ver:
+            model_ver_label = f"LightGBM-v{actual_ver}"
+        elif cached_pkl_path.exists():
+            model_ver_label = "LightGBM-RegistryCached"
+        else:
+            model_ver_label = "Baseline-Heuristic"
+
+        meta = {
+            "source": "mlflow" if synced_from_mlflow else "local_cache",
+            "model_version": model_ver_label,
+            "version": actual_ver,
+            "run_id": target_version_info.get("run_id") if target_version_info else None,
+        }
+        return model, feature_names, meta
+
+    def _create_fallback_engine(self, feature_names: List[str]) -> Any:
+        """Khởi tạo Fallback Engine khi chưa có model binary."""
         class HeuristicBoosterFallback:
             def __init__(self, features):
                 self.features = features
 
             def predict(self, X):
-                """Suy luận heuristic dựa trên chênh lệch phong độ và thị trường nếu chưa có binary."""
+                """
+                Suy luận định lượng dựa trên mô hình Poisson/Logistic đa nhân tố:
+                - Lợi thế sân nhà tự nhiên
+                - Phong độ 5 trận gần nhất (Home vs Away form)
+                - Hiệu số xG / tấn công & phòng ngự
+                - Lợi thế thể lực / số ngày nghỉ ngơi (Rest days)
+                - Tỷ lệ cược thị trường (nếu có)
+                """
                 n = len(X)
                 probs = np.zeros((n, 3))
                 for i in range(n):
                     row = X.iloc[i]
-                    p_home = float(row.get("f_mkt_p_home", 0.42) if pd.notna(row.get("f_mkt_p_home")) else 0.42)
-                    p_draw = float(row.get("f_mkt_p_draw", 0.28) if pd.notna(row.get("f_mkt_p_draw")) else 0.28)
-                    p_away = float(row.get("f_mkt_p_away", 0.30) if pd.notna(row.get("f_mkt_p_away")) else 0.30)
+                    
+                    # 1. Điểm nền tảng (Base Logits)
+                    logit_home = 0.38
+                    logit_draw = 0.02
+                    logit_away = 0.18
 
-                    # Điều chỉnh nhẹ theo chênh lệch xG và phong độ
+                    # 2. Đánh giá phong độ 5 trận gần nhất (Points rate từ 0.0 đến 1.0)
+                    home_pts = None
+                    for col in ["f_home_points_rate", "f_home_form5_points_rate", "f_roll5_home_points"]:
+                        if col in row and pd.notna(row[col]):
+                            home_pts = float(row[col])
+                            break
+
+                    away_pts = None
+                    for col in ["f_away_points_rate", "f_away_form5_points_rate", "f_roll5_away_points"]:
+                        if col in row and pd.notna(row[col]):
+                            away_pts = float(row[col])
+                            break
+
+                    if home_pts is not None and away_pts is not None:
+                        diff_pts = home_pts - away_pts
+                        logit_home += diff_pts * 1.75
+                        logit_away -= diff_pts * 1.75
+                        # Cặp đấu cân bằng cao -> tăng xác suất hòa
+                        if abs(diff_pts) < 0.18:
+                            logit_draw += (0.22 - abs(diff_pts)) * 1.2
+                    elif home_pts is not None:
+                        logit_home += (home_pts - 0.5) * 1.2
+                    elif away_pts is not None:
+                        logit_away += (away_pts - 0.5) * 1.2
+
+                    # 3. Chênh lệch kỳ vọng bàn thắng (xG)
                     diff_xg = float(row.get("f_diff_xg_for_roll5", 0.0) if pd.notna(row.get("f_diff_xg_for_roll5")) else 0.0)
-                    p_home += diff_xg * 0.05
-                    p_away -= diff_xg * 0.05
+                    logit_home += diff_xg * 0.40
+                    logit_away -= diff_xg * 0.40
 
-                    total = max(p_home + p_draw + p_away, 1e-6)
-                    probs[i, 0] = max(0.05, p_away / total)
-                    probs[i, 1] = max(0.05, p_draw / total)
-                    probs[i, 2] = max(0.05, p_home / total)
-                    probs[i] /= probs[i].sum()
+                    # 4. Lợi thế thể lực (Chênh lệch ngày nghỉ ngơi)
+                    diff_rest = float(row.get("f_diff_rest_days", 0.0) if pd.notna(row.get("f_diff_rest_days")) else 0.0)
+                    diff_rest_clamped = float(np.clip(diff_rest, -6.0, 6.0))
+                    logit_home += diff_rest_clamped * 0.035
+                    logit_away -= diff_rest_clamped * 0.035
+
+                    # 5. Tỷ lệ thị trường mở (nếu có sẵn)
+                    mkt_h = row.get("f_mkt_p_home")
+                    mkt_d = row.get("f_mkt_p_draw")
+                    mkt_a = row.get("f_mkt_p_away")
+                    if pd.notna(mkt_h) and pd.notna(mkt_a):
+                        logit_home = logit_home * 0.35 + float(mkt_h) * 1.6
+                        logit_away = logit_away * 0.35 + float(mkt_a) * 1.6
+                        if pd.notna(mkt_d):
+                            logit_draw = logit_draw * 0.35 + float(mkt_d) * 1.6
+
+                    # 6. Chuyển đổi Softmax phân phối xác suất 3 lớp [Away, Draw, Home]
+                    logits = np.array([logit_away, logit_draw, logit_home], dtype=float)
+                    exp_l = np.exp(logits - np.max(logits))
+                    p = exp_l / np.sum(exp_l)
+
+                    # Đảm bảo biên độ hợp lý trong bóng đá thực tế
+                    p = np.clip(p, 0.08, 0.82)
+                    p /= p.sum()
+
+                    probs[i, 0] = p[0]  # Away
+                    probs[i, 1] = p[1]  # Draw
+                    probs[i, 2] = p[2]  # Home
+
                 return probs
 
         return HeuristicBoosterFallback(feature_names)
@@ -288,9 +417,16 @@ class FeaturePipeline:
 class InferenceEngine:
     """Thực hiện suy luận xác suất 1X2 và tính toán SHAP Drivers."""
 
-    def __init__(self, model: Any, feature_names: List[str], draw_threshold: float = DRAW_CALIBRATION_THRESHOLD):
+    def __init__(
+        self,
+        model: Any,
+        feature_names: List[str],
+        model_version: str = "LightGBM-Champion",
+        draw_threshold: float = DRAW_CALIBRATION_THRESHOLD,
+    ):
         self.model = model
         self.feature_names = feature_names
+        self.model_version = model_version
         self.draw_threshold = draw_threshold
 
     def predict(self, meta_df: pd.DataFrame, X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -392,7 +528,7 @@ class InferenceEngine:
                 "top_driver_3_impact": driver_3_val,
                 "risk_driver_1_desc": risk_1_desc,
                 "risk_driver_1_impact": risk_1_val,
-                "model_version": "LightGBM-vFinal",
+                "model_version": self.model_version,
                 "predicted_at": now_ts,
             })
 
@@ -491,7 +627,11 @@ class InferenceEngine:
             label = FEATURE_DESCRIPTIONS.get(feat, feat)
             raw_v = row.get(feat)
             if pd.notna(raw_v):
-                desc = f"{label} ({raw_v:.2f})" if isinstance(raw_v, float) else f"{label} ({raw_v})"
+                try:
+                    f_val = float(raw_v)
+                    desc = f"{label} ({f_val:.2f})"
+                except (ValueError, TypeError):
+                    desc = f"{label} ({raw_v})"
             else:
                 desc = label
             return desc, impact
@@ -704,7 +844,7 @@ def run_pipeline(
     meta_df, X = FeaturePipeline.prepare_features(df, feature_names)
 
     # 4. Dự đoán & Tính SHAP
-    engine = InferenceEngine(model, feature_names)
+    engine = InferenceEngine(model, feature_names, model_version=meta.get("model_version", "LightGBM-Champion"))
     pred_df, shap_df = engine.predict(meta_df, X)
 
     logger.info("Dự đoán hoàn tất! Phân bổ kết quả:")

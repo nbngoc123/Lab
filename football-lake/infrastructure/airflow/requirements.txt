@@ -13,3 +13,10 @@ jeke-understat-scrapper
 
 dbt-duckdb
 confluent-kafka
+
+# ML Inference & Explainability (XAI)
+lightgbm
+shap
+mlflow-skinny
+scikit-learn
+joblib
