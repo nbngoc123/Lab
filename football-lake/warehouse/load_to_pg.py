@@ -37,6 +37,12 @@ TABLES = {
     "fact_match":      "dwh/fact_match.parquet",
     "fact_team_match": "dwh/fact_team_match.parquet",
     "fact_goal":       "dwh/fact_goal.parquet",
+    "fact_player_season": "dwh/fact_player_season.parquet",
+    # === Mart BI (Superset Analytics) ===
+    "mart_bi_match_analysis":      "dwh/mart_bi_match_analysis.parquet",
+    "mart_bi_team_match":          "dwh/mart_bi_team_match.parquet",
+    "mart_bi_team_season":         "dwh/mart_bi_team_season.parquet",
+    "mart_bi_player_season":       "dwh/mart_bi_player_season.parquet",
     # === Mart ML ===
     "mart_ml_match_features":      "dwh/mart_ml_match_features.parquet",
     "mart_ml_team_match_features": "dwh/mart_ml_team_match_features.parquet",

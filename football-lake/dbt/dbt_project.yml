@@ -52,3 +52,7 @@ models:
     mart:
       +schema: mart
       +materialized: external
+      bi:
+        +tags: ["bi"]
+      ml:
+        +tags: ["ml"]

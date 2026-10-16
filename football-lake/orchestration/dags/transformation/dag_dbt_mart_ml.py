@@ -21,7 +21,7 @@ with DAG(
 ) as dag:
     BashOperator(
         task_id="dbt_build_mart_ml",
-        bash_command="cd /opt/project/dbt && dbt build --select team_alias int_team_alias path:models/mart --profiles-dir .",
+        bash_command="cd /opt/project/dbt && dbt build --select team_alias int_team_alias path:models/mart/ml --profiles-dir .",
         env={"DBT_TARGET_PATH": "/tmp/dbt/dag_dbt_mart_ml/target", "DBT_LOG_PATH": "/tmp/dbt/dag_dbt_mart_ml/logs"},
         append_env=True,
     )
