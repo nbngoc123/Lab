@@ -1,0 +1,573 @@
+version: 2
+
+models:
+  - name: mart_bi_match_analysis
+    description: >-
+      Mart BI phân tích trận đấu, grain một dòng cho mỗi match_key từ fact_match.
+      Không join, DISTINCT, lọc hoặc dedup; giữ nguyên tập dòng, khóa và metadata nguồn.
+      Chỉ công bố tỷ số cuối, điểm quy ước 3/1/0 và cờ thắng/hòa/thua khi is_finished
+      và đủ tỷ số hai phía (has_result). Trận kết thúc thiếu tỷ số có cờ riêng, không coi là thua.
+      result giữ mã Core có điều kiện; core_result giữ nguyên mã nguồn để truy vết.
+      Test cứng đối chiếu mã kết quả với tỷ số, không tính lại mã để che mâu thuẫn.
+      Thống kê thực tế, tỷ số hiệp một và thời tiết lịch sử chỉ công bố khi is_finished;
+      thiếu dữ liệu vẫn là NULL, không thay bằng 0. Phép cộng/trừ cần đủ hai thành phần;
+      mọi chênh lệch là nhà trừ khách, không cộng gộp thẻ vàng và đỏ thành một chỉ số.
+      Các cờ coverage dựa trên cột đã công bố, tính cả giá trị 0, không khẳng định hợp lệ vật lý.
+      has_weather và in_* chỉ là hiện diện dòng nguồn, kể cả fixture chưa kết thúc.
+      Giữ nguyên cú sút bất thường Burnley Championship 2024 (2,7) và West Ham EPL 2021 (8,9).
+      Shot accuracy tương ứng có thể lớn hơn 1; cờ chất lượng là FALSE, test miền chỉ WARN.
+      Không tự sửa, chặn tỷ lệ, loại dòng hoặc quy NULL cho bất thường; test công thức cờ là ERROR.
+      Chưa có match_key chính xác của hai trường hợp để gắn regression test riêng từng trận.
+      Đây là bảng thống kê sau trận, không phải dữ liệu biết trước trận cho ML.
+      Không đưa Understat forecast vào như dự báo trước trận. Chưa có possession/passing,
+      đội hình/chấn thương hoặc thống kê cầu thủ theo trận đáng tin cậy trong Core.
+      PPDA/deep/xpts/npxg thuộc fact_team_match, không thuộc dependency trực tiếp của bản v1 này.
+      Không đưa odds vào v1. Không suy giờ địa phương, sân trung lập hoặc thời lượng trận.
+      season kế thừa mốc tháng 7 của Core; match_key không chứa giải, Core coalesce tỷ số theo nguồn.
+      Tỷ số có thể trộn quy ước 90 phút/hiệp phụ/luân lưu; chưa đủ dữ liệu để chuẩn hóa ở Mart.
+      Thời tiết Core lấy sân chính đội nhà, có thể không trùng venue_name hay sân thực tế.
+      Dashboard quan hệ kết quả lọc has_result; hiển thị coverage, goals_conflict và chất lượng cú sút.
+      Tổng hợp tỷ lệ bằng SUM tử/SUM mẫu trên cùng tập quan sát đủ hai thành phần,
+      dùng NULLIF mẫu tổng bằng 0; không AVG đơn giản tỷ lệ từng trận hoặc tự bỏ dòng bất thường.
+      SQL chỉ phụ thuộc fact_match; test nguồn cũng chỉ tham chiếu fact_match.
+      Hai Mart trước được kiểm thử sandbox, chưa bảo đảm có Parquet BI chính thức.
+      Đối soát độc lập sau này cần cả ba Mart trên cùng snapshot: unpivot nhà/khách so với Mart 1,
+      gom competition_key/season/team_key theo has_result và cùng coverage để so với Mart 2.
+      Kiểm thử sandbox phải xác minh external_root riêng và Core đầu vào có thể đọc;
+      không chạy profile mặc định để kiểm thử, không tự rebuild Core.
+      Theo macro hiện tại output mặc định là dwh/mart_bi_match_analysis.parquet,
+      không phải đích được phép dùng trong kiểm thử sandbox.
+      Kiểu nguồn được đối chiếu từ CAST/macro Core và staging: khóa/metadata VARCHAR,
+      số đếm INTEGER, xG/thời tiết DOUBLE, ngày DATE, kickoff TIMESTAMP, cờ BOOLEAN.
+      Đây là đối chiếu tĩnh, không phải xác nhận kiểu vật lý hoặc độ phủ Parquet runtime;
+      không khai báo contract để ép kiểu dữ liệu chưa được kiểm tra.
+    tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('fact_match')
+      - dbt_utils.equality:
+          compare_model: ref('fact_match')
+          compare_columns: [match_key, competition_key, season, home_key, away_key, match_date, kickoff_utc, status, stage, matchday, af_round, referee, venue_name, is_finished, fdo_match_id, understat_match_id, af_fixture_id, openliga_match_id, goals_conflict, in_fdo, in_couk, in_understat, in_api_football, in_openliga, in_odds_api, has_weather]
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_distinct_teams
+          expression: >-
+            coalesce((home_key <> away_key), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_result_availability_matches_source
+          expression: >-
+            coalesce(((has_result) is not distinct from (match_key in (select match_key from {{ ref('fact_match') }} where is_finished and home_goals is not null and away_goals is not null))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_missing_final_score_matches_source
+          expression: >-
+            coalesce(((is_missing_final_score) is not distinct from (match_key in (select match_key from {{ ref('fact_match') }} where is_finished and (home_goals is null or away_goals is null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_core_result_preserved
+          expression: >-
+            coalesce(((core_result is null and match_key in (select match_key from {{ ref('fact_match') }} where result is null))
+            or (core_result is not null and row(match_key, core_result) in (select row(match_key, result) from {{ ref('fact_match') }} where result is not null))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_final_scores_preserved
+          expression: >-
+            coalesce((not has_result or (home_goals is not null and away_goals is not null
+            and row(match_key, home_goals, away_goals) in
+            (select row(match_key, home_goals, away_goals) from {{ ref('fact_match') }}
+             where is_finished and home_goals is not null and away_goals is not null))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_result_lifecycle
+          expression: >-
+            coalesce(((has_result and is_finished and home_goals is not null and away_goals is not null
+             and result is not null and home_points is not null and away_points is not null
+             and is_home_win is not null and is_draw is not null and is_away_win is not null)
+            or (not has_result and home_goals is null and away_goals is null and result is null
+             and home_points is null and away_points is null and is_home_win is null
+             and is_draw is null and is_away_win is null and total_goals is null and goal_difference is null
+             and home_goals_minus_xg is null and away_goals_minus_xg is null)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_result_matches_core_and_score
+          expression: >-
+            coalesce((not has_result or (result is not distinct from core_result and
+             ((home_goals > away_goals and result = 'H')
+              or (home_goals = away_goals and result = 'D')
+              or (home_goals < away_goals and result = 'A')))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_points_match_score
+          expression: >-
+            coalesce((not has_result
+            or (home_goals > away_goals and home_points = 3 and away_points = 0)
+            or (home_goals = away_goals and home_points = 1 and away_points = 1)
+            or (home_goals < away_goals and home_points = 0 and away_points = 3)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_outcome_flags
+          expression: >-
+            coalesce(((is_home_win) is not distinct from (case when has_result then (home_goals > away_goals)::integer end)
+            and (is_draw) is not distinct from (case when has_result then (home_goals = away_goals)::integer end)
+            and (is_away_win) is not distinct from (case when has_result then (home_goals < away_goals)::integer end)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_goal_arithmetic
+          expression: >-
+            coalesce(((total_goals) is not distinct from (case when has_result then home_goals + away_goals end)
+            and (goal_difference) is not distinct from (case when has_result then home_goals - away_goals end)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_unfinished_actual_statistics_are_null
+          expression: >-
+            coalesce((is_finished or (ht_home_goals is null
+            and ht_away_goals is null
+            and home_xg is null
+            and away_xg is null
+            and home_shots is null
+            and away_shots is null
+            and home_shots_target is null
+            and away_shots_target is null
+            and home_corners is null
+            and away_corners is null
+            and home_fouls is null
+            and away_fouls is null
+            and home_yellows is null
+            and away_yellows is null
+            and home_reds is null
+            and away_reds is null
+            and weather_temp_c is null
+            and weather_precip_mm is null
+            and weather_wind_kmh is null
+            and weather_humidity_pct is null
+            and weather_code is null
+            and total_xg is null
+            and xg_difference is null
+            and shots_difference is null
+            and shots_target_difference is null
+            and corners_difference is null
+            and fouls_difference is null
+            and yellows_difference is null
+            and reds_difference is null
+            and total_shots is null
+            and total_shots_target is null
+            and total_corners is null
+            and total_fouls is null
+            and total_yellows is null
+            and total_reds is null
+            and home_shot_accuracy is null
+            and away_shot_accuracy is null)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_xg_arithmetic
+          expression: >-
+            coalesce(((total_xg) is not distinct from (home_xg + away_xg)
+            and (xg_difference) is not distinct from (home_xg - away_xg)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_xg_source_values_preserved
+          expression: >-
+            coalesce((((home_xg is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_xg is null))
+            or (home_xg is not null and row(match_key, home_xg) in
+             (select row(match_key, home_xg) from {{ ref('fact_match') }} where is_finished and home_xg is not null)))
+            and ((away_xg is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_xg is null))
+            or (away_xg is not null and row(match_key, away_xg) in
+             (select row(match_key, away_xg) from {{ ref('fact_match') }} where is_finished and away_xg is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_shots_arithmetic
+          expression: >-
+            coalesce(((total_shots) is not distinct from (home_shots + away_shots)
+            and (shots_difference) is not distinct from (home_shots - away_shots)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_shots_source_values_preserved
+          expression: >-
+            coalesce((((home_shots is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_shots is null))
+            or (home_shots is not null and row(match_key, home_shots) in
+             (select row(match_key, home_shots) from {{ ref('fact_match') }} where is_finished and home_shots is not null)))
+            and ((away_shots is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_shots is null))
+            or (away_shots is not null and row(match_key, away_shots) in
+             (select row(match_key, away_shots) from {{ ref('fact_match') }} where is_finished and away_shots is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_shots_target_arithmetic
+          expression: >-
+            coalesce(((total_shots_target) is not distinct from (home_shots_target + away_shots_target)
+            and (shots_target_difference) is not distinct from (home_shots_target - away_shots_target)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_shots_target_source_values_preserved
+          expression: >-
+            coalesce((((home_shots_target is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_shots_target is null))
+            or (home_shots_target is not null and row(match_key, home_shots_target) in
+             (select row(match_key, home_shots_target) from {{ ref('fact_match') }} where is_finished and home_shots_target is not null)))
+            and ((away_shots_target is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_shots_target is null))
+            or (away_shots_target is not null and row(match_key, away_shots_target) in
+             (select row(match_key, away_shots_target) from {{ ref('fact_match') }} where is_finished and away_shots_target is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_corners_arithmetic
+          expression: >-
+            coalesce(((total_corners) is not distinct from (home_corners + away_corners)
+            and (corners_difference) is not distinct from (home_corners - away_corners)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_corners_source_values_preserved
+          expression: >-
+            coalesce((((home_corners is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_corners is null))
+            or (home_corners is not null and row(match_key, home_corners) in
+             (select row(match_key, home_corners) from {{ ref('fact_match') }} where is_finished and home_corners is not null)))
+            and ((away_corners is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_corners is null))
+            or (away_corners is not null and row(match_key, away_corners) in
+             (select row(match_key, away_corners) from {{ ref('fact_match') }} where is_finished and away_corners is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_fouls_arithmetic
+          expression: >-
+            coalesce(((total_fouls) is not distinct from (home_fouls + away_fouls)
+            and (fouls_difference) is not distinct from (home_fouls - away_fouls)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_fouls_source_values_preserved
+          expression: >-
+            coalesce((((home_fouls is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_fouls is null))
+            or (home_fouls is not null and row(match_key, home_fouls) in
+             (select row(match_key, home_fouls) from {{ ref('fact_match') }} where is_finished and home_fouls is not null)))
+            and ((away_fouls is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_fouls is null))
+            or (away_fouls is not null and row(match_key, away_fouls) in
+             (select row(match_key, away_fouls) from {{ ref('fact_match') }} where is_finished and away_fouls is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_yellows_arithmetic
+          expression: >-
+            coalesce(((total_yellows) is not distinct from (home_yellows + away_yellows)
+            and (yellows_difference) is not distinct from (home_yellows - away_yellows)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_yellows_source_values_preserved
+          expression: >-
+            coalesce((((home_yellows is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_yellows is null))
+            or (home_yellows is not null and row(match_key, home_yellows) in
+             (select row(match_key, home_yellows) from {{ ref('fact_match') }} where is_finished and home_yellows is not null)))
+            and ((away_yellows is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_yellows is null))
+            or (away_yellows is not null and row(match_key, away_yellows) in
+             (select row(match_key, away_yellows) from {{ ref('fact_match') }} where is_finished and away_yellows is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_reds_arithmetic
+          expression: >-
+            coalesce(((total_reds) is not distinct from (home_reds + away_reds)
+            and (reds_difference) is not distinct from (home_reds - away_reds)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_reds_source_values_preserved
+          expression: >-
+            coalesce((((home_reds is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or home_reds is null))
+            or (home_reds is not null and row(match_key, home_reds) in
+             (select row(match_key, home_reds) from {{ ref('fact_match') }} where is_finished and home_reds is not null)))
+            and ((away_reds is null and match_key in
+             (select match_key from {{ ref('fact_match') }} where not is_finished or away_reds is null))
+            or (away_reds is not null and row(match_key, away_reds) in
+             (select row(match_key, away_reds) from {{ ref('fact_match') }} where is_finished and away_reds is not null)))), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_goals_minus_xg
+          expression: >-
+            coalesce(((home_goals_minus_xg) is not distinct from (case when has_result then home_goals - home_xg end)
+            and (away_goals_minus_xg) is not distinct from (case when has_result then away_goals - away_xg end)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_statistic_pair_coverage
+          expression: >-
+            coalesce(((has_xg_pair) is not distinct from (home_xg is not null and away_xg is not null)
+            and (has_shots_pair) is not distinct from (home_shots is not null and away_shots is not null)
+            and (has_shots_target_pair) is not distinct from (home_shots_target is not null and away_shots_target is not null)
+            and (has_corners_pair) is not distinct from (home_corners is not null and away_corners is not null)
+            and (has_fouls_pair) is not distinct from (home_fouls is not null and away_fouls is not null)
+            and (has_yellows_pair) is not distinct from (home_yellows is not null and away_yellows is not null)
+            and (has_reds_pair) is not distinct from (home_reds is not null and away_reds is not null)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_home_shots_quality_flag
+          expression: >-
+            coalesce(((home_shots_pair_valid) is not distinct from (case when home_shots is not null and home_shots_target is not null
+             then (home_shots >= 0 and home_shots_target >= 0 and home_shots_target <= home_shots) end)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_home_shot_accuracy
+          expression: >-
+            coalesce(((home_shots is null or home_shots_target is null or home_shots = 0)
+             and home_shot_accuracy is null
+            or (home_shots is not null and home_shots_target is not null and home_shots <> 0
+             and home_shot_accuracy is not null
+             and abs(home_shot_accuracy - 1.0 * home_shots_target / nullif(home_shots, 0)) < 0.00000001)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_home_shots_physical_domain
+          expression: >-
+            coalesce(((home_shots is null or home_shots >= 0)
+            and (home_shots_target is null or home_shots_target >= 0)
+            and (home_shots is null or home_shots_target is null or home_shots_target <= home_shots)), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_away_shots_quality_flag
+          expression: >-
+            coalesce(((away_shots_pair_valid) is not distinct from (case when away_shots is not null and away_shots_target is not null
+             then (away_shots >= 0 and away_shots_target >= 0 and away_shots_target <= away_shots) end)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_away_shot_accuracy
+          expression: >-
+            coalesce(((away_shots is null or away_shots_target is null or away_shots = 0)
+             and away_shot_accuracy is null
+            or (away_shots is not null and away_shots_target is not null and away_shots <> 0
+             and away_shot_accuracy is not null
+             and abs(away_shot_accuracy - 1.0 * away_shots_target / nullif(away_shots, 0)) < 0.00000001)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_away_shots_physical_domain
+          expression: >-
+            coalesce(((away_shots is null or away_shots >= 0)
+            and (away_shots_target is null or away_shots_target >= 0)
+            and (away_shots is null or away_shots_target is null or away_shots_target <= away_shots)), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_calendar_fields
+          expression: >-
+            coalesce(((match_year) is not distinct from (date_part('year', match_date)::integer)
+            and (match_month) is not distinct from (date_part('month', match_date)::integer)
+            and (match_day_of_week) is not distinct from (date_part('isodow', match_date)::integer)
+            and (is_weekend) is not distinct from (date_part('isodow', match_date) in (6, 7))
+            and (kickoff_hour_utc) is not distinct from (date_part('hour', kickoff_utc)::integer)), false)
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_counts_nonnegative
+          expression: >-
+            coalesce(((home_goals is null or home_goals >= 0)
+            and (away_goals is null or away_goals >= 0)
+            and (ht_home_goals is null or ht_home_goals >= 0)
+            and (ht_away_goals is null or ht_away_goals >= 0)
+            and (home_corners is null or home_corners >= 0)
+            and (away_corners is null or away_corners >= 0)
+            and (home_fouls is null or home_fouls >= 0)
+            and (away_fouls is null or away_fouls >= 0)
+            and (home_yellows is null or home_yellows >= 0)
+            and (away_yellows is null or away_yellows >= 0)
+            and (home_reds is null or home_reds >= 0)
+            and (away_reds is null or away_reds >= 0)), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_xg_nonnegative
+          expression: >-
+            coalesce(((home_xg is null or home_xg >= 0) and (away_xg is null or away_xg >= 0)), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_source_score_agreement
+          expression: >-
+            coalesce((not goals_conflict), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_finished_score_coverage
+          expression: >-
+            coalesce((not is_missing_final_score), false)
+          config:
+            severity: warn
+      - dbt_utils.expression_is_true:
+          name: mart_bi_match_analysis_weather_physical_domain
+          expression: >-
+            coalesce(((weather_precip_mm is null or weather_precip_mm >= 0)
+            and (weather_wind_kmh is null or weather_wind_kmh >= 0)
+            and (weather_humidity_pct is null or weather_humidity_pct between 0 and 100)), false)
+          config:
+            severity: warn
+    columns:
+      - name: match_key
+        description: "Khóa trận kế thừa Core: MD5 của đội nhà, đội khách và ngày; không bao gồm giải."
+        tests:
+          - not_null
+          - unique
+          - relationships: {to: ref('fact_match'), field: match_key}
+      - name: competition_key
+        description: "Khóa giải từ Core; không tự ánh xạ hoặc sửa giải."
+        tests:
+          - not_null
+      - name: season
+        description: "Năm bắt đầu mùa kế thừa season_of(match_date) của Core (mốc tháng 7); có thể sai ở mùa kéo dài."
+      - name: home_key
+        description: "Khóa đội nhà theo fixture, liên kết dim_team.team_key; không suy ra sân trung lập."
+        tests:
+          - not_null
+      - name: away_key
+        description: "Khóa đội khách theo fixture, liên kết dim_team.team_key."
+        tests:
+          - not_null
+      - name: match_date
+        description: "Ngày trận, kiểu DATE được Core ép từ nguồn."
+        tests:
+          - not_null
+      - name: kickoff_utc
+        description: "Giờ bắt đầu UTC, TIMESTAMP theo code nguồn; giữ NULL nếu thiếu, không gán giờ."
+      - name: status
+        description: "Trạng thái văn bản Core ưu tiên football-data.org/OpenLiga; có thể thiếu hoặc khác is_finished."
+      - name: stage
+        description: "Giai đoạn từ football-data.org, VARCHAR; có thể NULL."
+      - name: matchday
+        description: "Vòng đấu từ football-data.org/OpenLiga, INTEGER theo code nguồn; có thể NULL."
+      - name: af_round
+        description: "Vòng đấu văn bản từ API-Football; có thể NULL."
+      - name: referee
+        description: "Trọng tài kế thừa thứ tự ưu tiên nguồn Core; có thể NULL."
+      - name: venue_name
+        description: "Tên sân từ API-Football/OpenLiga; có thể NULL, không đảm bảo là sân dùng để ghép thời tiết."
+      - name: is_finished
+        description: "BOOLEAN Core gộp trạng thái kết thúc nhiều nguồn; không suy lại từ status hoặc tỷ số."
+        tests:
+          - not_null
+      - name: has_result
+        description: "TRUE khi is_finished và cả hai bàn thắng nguồn khác NULL; FALSE không có nghĩa là thua."
+        tests:
+          - not_null
+      - name: is_missing_final_score
+        description: "TRUE khi Core báo kết thúc nhưng thiếu ít nhất một tỷ số; giữ dòng để kiểm tra."
+        tests:
+          - not_null
+      - name: core_result
+        description: "Mã H/D/A nguyên bản từ fact_match.result, kể cả NULL hoặc giá trị mâu thuẫn. Chỉ dùng truy vết; test cứng đối chiếu với tỷ số, không sửa mã Core."
+      - name: home_goals
+        description: "Bàn đội nhà INTEGER, chỉ khi has_result."
+      - name: away_goals
+        description: "Bàn đội khách INTEGER, chỉ khi has_result."
+      - name: result
+        description: "Mã H/D/A từ Core chỉ khi has_result; không tự thay bằng mã tính lại. Test phát hiện mã sai hoặc thiếu."
+        tests:
+          - accepted_values: {values: ['H', 'D', 'A']}
+      - name: home_points
+        description: "Điểm quy ước BI 3/1/0 theo tỷ số khi has_result; không phải điểm xếp hạng chính thức của trận cúp."
+      - name: away_points
+        description: "Điểm đội khách quy ước BI 3/1/0 theo tỷ số khi has_result."
+      - name: is_home_win
+        description: "Cờ INTEGER 1 nếu nhà thắng, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+      - name: is_draw
+        description: "Cờ INTEGER 1 nếu hòa, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+      - name: is_away_win
+        description: "Cờ INTEGER 1 nếu khách thắng, 0 nếu kết quả khác; NULL khi chưa đủ kết quả."
+      - name: total_goals
+        description: "Tổng bàn hai đội khi has_result; NULL nếu chưa đủ kết quả."
+      - name: goal_difference
+        description: "Bàn nhà trừ bàn khách khi has_result; NULL nếu chưa đủ kết quả."
+      - name: ht_home_goals
+        description: "Bàn hiệp một đội nhà INTEGER từ Core, chỉ khi is_finished; không suy từ tỷ số cuối trận."
+      - name: ht_away_goals
+        description: "Bàn hiệp một đội khách INTEGER từ Core, chỉ khi is_finished; không suy từ tỷ số cuối trận."
+      - name: home_xg
+        description: "xG DOUBLE sau trận từ Understat, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_xg
+        description: "xG DOUBLE sau trận từ Understat, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_xg
+        description: "Tổng xg hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: xg_difference
+        description: "xg đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_shots
+        description: "Số cú sút INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_shots
+        description: "Số cú sút INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_shots
+        description: "Tổng shots hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: shots_difference
+        description: "shots đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_shots_target
+        description: "Số sút trúng đích INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_shots_target
+        description: "Số sút trúng đích INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_shots_target
+        description: "Tổng shots_target hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: shots_target_difference
+        description: "shots_target đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_corners
+        description: "Số góc INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_corners
+        description: "Số góc INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_corners
+        description: "Tổng corners hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: corners_difference
+        description: "corners đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_fouls
+        description: "Số lỗi INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_fouls
+        description: "Số lỗi INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_fouls
+        description: "Tổng fouls hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: fouls_difference
+        description: "fouls đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_yellows
+        description: "Số thẻ vàng INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_yellows
+        description: "Số thẻ vàng INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_yellows
+        description: "Tổng yellows hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: yellows_difference
+        description: "yellows đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_reds
+        description: "Số thẻ đỏ INTEGER từ football-data.co.uk, đội nhà; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: away_reds
+        description: "Số thẻ đỏ INTEGER từ football-data.co.uk, đội khách; chỉ công bố khi is_finished, thiếu vẫn NULL."
+      - name: total_reds
+        description: "Tổng reds hai đội trên cùng trận; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: reds_difference
+        description: "reds đội nhà trừ đội khách; NULL nếu một phía thiếu hoặc trận chưa kết thúc."
+      - name: home_goals_minus_xg
+        description: "Bàn trừ xG nhà khi has_result và có xG bên đó; không cần xG đối thủ."
+      - name: home_shot_accuracy
+        description: "Sút trúng đích / cú sút nhà, tỷ lệ 0..1 thông thường; NULL khi thiếu hoặc mẫu 0. Giữ nguyên tỷ lệ >1 của bất thường nguồn, không chặn hoặc sửa."
+      - name: away_goals_minus_xg
+        description: "Bàn trừ xG khách khi has_result và có xG bên đó; không cần xG đối thủ."
+      - name: away_shot_accuracy
+        description: "Sút trúng đích / cú sút khách, tỷ lệ 0..1 thông thường; NULL khi thiếu hoặc mẫu 0. Giữ nguyên tỷ lệ >1 của bất thường nguồn, không chặn hoặc sửa."
+      - name: has_xg_pair
+        description: "Coverage xg: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_shots_pair
+        description: "Coverage shots: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_shots_target_pair
+        description: "Coverage shots_target: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_corners_pair
+        description: "Coverage corners: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_fouls_pair
+        description: "Coverage fouls: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_yellows_pair
+        description: "Coverage yellows: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: has_reds_pair
+        description: "Coverage reds: TRUE khi cả hai phía được công bố khác NULL, kể cả 0; FALSE khi thiếu hoặc chưa kết thúc. Không đảm bảo hợp lệ vật lý."
+      - name: home_shots_pair_valid
+        description: "Cờ chất lượng nhà BOOLEAN: NULL nếu thiếu cú sút hoặc trúng đích; TRUE nếu cả hai không âm và trúng đích <= cú sút; FALSE nếu vi phạm. Không sửa, loại hoặc che thống kê."
+      - name: away_shots_pair_valid
+        description: "Cờ chất lượng khách BOOLEAN: NULL nếu thiếu cú sút hoặc trúng đích; TRUE nếu cả hai không âm và trúng đích <= cú sút; FALSE nếu vi phạm. Không sửa, loại hoặc che thống kê."
+      - name: match_year
+        description: "Năm lịch từ match_date; không thay thế season."
+      - name: match_month
+        description: "Tháng lịch 1..12 từ match_date."
+      - name: match_day_of_week
+        description: "Thứ ISO 1=thứ Hai đến 7=Chủ nhật từ match_date, không phải ngày địa phương của sân."
+      - name: is_weekend
+        description: "TRUE nếu match_date là thứ Bảy/Chủ nhật; NULL nếu thiếu ngày."
+      - name: kickoff_hour_utc
+        description: "Giờ UTC 0..23 từ kickoff_utc; NULL nếu thiếu giờ. Không suy múi giờ địa phương."
+      - name: weather_temp_c
+        description: "Nhiệt độ DOUBLE, độ C lịch sử do Core ghép tại sân chính đội nhà và giờ trận; chỉ khi is_finished. Không phải dự báo có sẵn trước trận; có thể thiếu hoặc lệch sân thực tế."
+      - name: weather_precip_mm
+        description: "Lượng mưa DOUBLE, mm lịch sử do Core ghép tại sân chính đội nhà và giờ trận; chỉ khi is_finished. Không phải dự báo có sẵn trước trận; có thể thiếu hoặc lệch sân thực tế."
+      - name: weather_wind_kmh
+        description: "Gió DOUBLE, km/h lịch sử do Core ghép tại sân chính đội nhà và giờ trận; chỉ khi is_finished. Không phải dự báo có sẵn trước trận; có thể thiếu hoặc lệch sân thực tế."
+      - name: weather_humidity_pct
+        description: "Độ ẩm DOUBLE, % lịch sử do Core ghép tại sân chính đội nhà và giờ trận; chỉ khi is_finished. Không phải dự báo có sẵn trước trận; có thể thiếu hoặc lệch sân thực tế."
+      - name: weather_code
+        description: "Mã thời tiết INTEGER của Open-Meteo lịch sử do Core ghép tại sân chính đội nhà và giờ trận; chỉ khi is_finished. Không phải dự báo có sẵn trước trận; có thể thiếu hoặc lệch sân thực tế."
+      - name: fdo_match_id
+        description: "ID nguồn fdo_match_id đã được Core CAST VARCHAR; chỉ truy vết, không join theo ID này."
+      - name: understat_match_id
+        description: "ID nguồn understat_match_id đã được Core CAST VARCHAR; chỉ truy vết, không join theo ID này."
+      - name: af_fixture_id
+        description: "ID nguồn af_fixture_id đã được Core CAST VARCHAR; chỉ truy vết, không join theo ID này."
+      - name: openliga_match_id
+        description: "ID nguồn openliga_match_id đã được Core CAST VARCHAR; chỉ truy vết, không join theo ID này."
+      - name: goals_conflict
+        description: "TRUE khi Core thấy nhiều tỷ số khác nhau giữa nguồn; giữ tỷ số ưu tiên và cờ, không loại trận. Khác với mâu thuẫn result/tỷ số."
+      - name: in_fdo
+        description: "BOOLEAN hiện diện dòng nguồn fdo trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: in_couk
+        description: "BOOLEAN hiện diện dòng nguồn couk trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: in_understat
+        description: "BOOLEAN hiện diện dòng nguồn understat trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: in_api_football
+        description: "BOOLEAN hiện diện dòng nguồn api_football trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: in_openliga
+        description: "BOOLEAN hiện diện dòng nguồn openliga trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: in_odds_api
+        description: "BOOLEAN hiện diện dòng nguồn odds_api trong Core, không bảo đảm từng chỉ số có dữ liệu hoặc sẵn có trước trận."
+      - name: has_weather
+        description: "BOOLEAN hiện diện dòng thời tiết do Core ghép, giữ cả cho trận chưa kết thúc; không đồng nghĩa đủ tất cả cột. Thời tiết công bố vẫn bị giới hạn is_finished."
