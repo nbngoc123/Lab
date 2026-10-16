@@ -623,6 +623,7 @@ class DWHStorageSink:
             FROM pg.{PG_SCHEMA}.v_match_predictions_dashboard
             WHERE is_upcoming_future = true OR split = 'predict'
             ORDER BY match_date ASC, kickoff_utc ASC;
+            """
             try:
                 con.execute(view_sql)
                 logger.info("✓ Đã tạo/cập nhật View Superset: %s.v_match_predictions_dashboard & v_upcoming_match_predictions", PG_SCHEMA)
