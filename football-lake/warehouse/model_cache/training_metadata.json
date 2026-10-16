@@ -1,0 +1,21 @@
+{
+  "run_id": "265eb0f932544d2fae931548fd6bdb51",
+  "date_column": "match_date",
+  "target_column": "y_result_code",
+  "class_mapping": {
+    "0": "Away win",
+    "1": "Draw",
+    "2": "Home win"
+  },
+  "train_end": "2024-06-30",
+  "valid_end": "2025-06-30",
+  "max_missing_rate_train": 0.15,
+  "draw_weight": 1.5,
+  "n_raw": 31028,
+  "n_after_filter": 22376,
+  "n_train": 12984,
+  "n_validation": 4667,
+  "n_test": 4725,
+  "n_features": 92,
+  "train_missing_rate_threshold": 0.15
+}

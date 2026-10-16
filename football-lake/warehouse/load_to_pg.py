@@ -47,6 +47,8 @@ TABLES = {
     "mart_ml_match_features":      "dwh/mart_ml_match_features.parquet",
     "mart_ml_team_match_features": "dwh/mart_ml_team_match_features.parquet",
     "mart_ml_goals":               "dwh/mart_ml_goals.parquet",
+    "mart_ml_predictions":         "dwh/mart_ml_predictions.parquet",
+    "mart_ml_prediction_shap_factors": "dwh/mart_ml_prediction_shap_factors.parquet",
 }
 
 
