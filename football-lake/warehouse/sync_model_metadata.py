@@ -191,8 +191,8 @@ def sync_metadata():
     dr_test = report_test.get("Draw", {})
     aw_test = report_test.get("Away win", {})
 
+    cur.execute(f"DELETE FROM {PG_SCHEMA}.dim_ml_model_metadata WHERE model_version = %s;", (model_version_label,))
     cur.execute(f"""
-    DELETE FROM {PG_SCHEMA}.dim_ml_model_metadata WHERE model_version = %s;
     INSERT INTO {PG_SCHEMA}.dim_ml_model_metadata (
         model_version, model_name, run_id, experiment_id, experiment_name,
         algorithm, objective, dataset_source,
