@@ -270,14 +270,14 @@ def sync_metadata():
         total_imp = df_feat["importance"].sum()
         df_feat = df_feat.sort_values(by="importance", ascending=False).reset_index(drop=True)
         for idx, row in df_feat.iterrows():
-            f_name = row["feature"]
+            f_name = str(row["feature"])
             score = float(row["importance"])
-            rel_pct = round((score / total_imp) * 100, 2)
-            label = FEATURE_DESCRIPTIONS.get(f_name, f_name)
+            rel_pct = float(round((score / float(total_imp)) * 100, 2))
+            label = str(FEATURE_DESCRIPTIONS.get(f_name, f_name))
             cur.execute(f"""
             INSERT INTO {PG_SCHEMA}.mart_ml_feature_importance (feature_name, feature_label, importance_score, relative_pct, rank)
             VALUES (%s, %s, %s, %s, %s);
-            """, (f_name, label, score, rel_pct, idx + 1))
+            """, (f_name, label, score, rel_pct, int(idx + 1)))
         logger.info("✓ Đã nạp thành công %d đặc trưng vào %s.mart_ml_feature_importance", len(df_feat), PG_SCHEMA)
 
     # 4.3 Bảng mart_ml_model_class_metrics (So sánh 3 lớp: Home, Draw, Away giữa Test và Validation)
