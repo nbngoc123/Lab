@@ -17,10 +17,10 @@ SELECT
     ht.short_name                                                   AS home_team_short,
     ht.logo_url                                                     AS home_logo_url,
     p.away_key,
-    coalesce(at.name, p.away_key)                                   AS away_team_name,
-    at.short_name                                                   AS away_team_short,
-    at.logo_url                                                     AS away_logo_url,
-    concat(coalesce(ht.name, p.home_key), ' vs ', coalesce(at.name, p.away_key)) AS match_fixture,
+    coalesce(awt.name, p.away_key)                                   AS away_team_name,
+    awt.short_name                                                   AS away_team_short,
+    awt.logo_url                                                     AS away_logo_url,
+    concat(coalesce(ht.name, p.home_key), ' vs ', coalesce(awt.name, p.away_key)) AS match_fixture,
     p.split,
     p.is_finished,
     p.actual_result,
@@ -71,7 +71,7 @@ SELECT
 FROM dwh.mart_ml_predictions p
 LEFT JOIN dwh.dim_competition c ON c.competition_key = p.competition_key
 LEFT JOIN dwh.dim_team ht ON ht.team_key = p.home_key
-LEFT JOIN dwh.dim_team at ON at.team_key = p.away_key;
+LEFT JOIN dwh.dim_team awt ON awt.team_key = p.away_key;
 
 
 -- 2. VIEW CHUYÊN DỤNG: CÁC TRẬN ĐẤU SẮP DIỄN RA TỪ HÔM NAY TRỞ ĐI (UPCOMING FIXTURES)

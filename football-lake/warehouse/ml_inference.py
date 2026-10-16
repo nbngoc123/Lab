@@ -568,10 +568,10 @@ class DWHStorageSink:
                 ht.short_name as home_team_short,
                 ht.logo_url as home_logo_url,
                 p.away_key,
-                coalesce(at.name, p.away_key) as away_team_name,
-                at.short_name as away_team_short,
-                at.logo_url as away_logo_url,
-                concat(coalesce(ht.name, p.home_key), ' vs ', coalesce(at.name, p.away_key)) as match_fixture,
+                coalesce(awt.name, p.away_key) as away_team_name,
+                awt.short_name as away_team_short,
+                awt.logo_url as away_logo_url,
+                concat(coalesce(ht.name, p.home_key), ' vs ', coalesce(awt.name, p.away_key)) as match_fixture,
                 p.split,
                 p.is_finished,
                 p.actual_result,
@@ -614,7 +614,7 @@ class DWHStorageSink:
             FROM pg.{PG_SCHEMA}.mart_ml_predictions p
             LEFT JOIN pg.{PG_SCHEMA}.dim_competition c ON c.competition_key = p.competition_key
             LEFT JOIN pg.{PG_SCHEMA}.dim_team ht ON ht.team_key = p.home_key
-            LEFT JOIN pg.{PG_SCHEMA}.dim_team at ON at.team_key = p.away_key;
+            LEFT JOIN pg.{PG_SCHEMA}.dim_team awt ON awt.team_key = p.away_key;
 
             CREATE OR REPLACE VIEW pg.{PG_SCHEMA}.v_upcoming_match_predictions AS
             SELECT *
