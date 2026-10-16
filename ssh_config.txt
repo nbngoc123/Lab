@@ -17,6 +17,7 @@ Host vm
     LocalForward 8081 localhost:8081
     LocalForward 9090 localhost:9090
     LocalForward 9999 localhost:9999
+    LocalForward 5000 localhost:5000
     ServerAliveInterval 60
     ServerAliveCountMax 3
     StrictHostKeyChecking no

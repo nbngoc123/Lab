@@ -6,7 +6,7 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-default_args = {"owner": "airflow", "retries": 1}
+default_args = {"owner": "airflow", "retries": 1, "pool": "heavy_pool"}
 
 with DAG(
     dag_id="dag_load_dwh",
@@ -15,6 +15,7 @@ with DAG(
     start_date=datetime(2026, 10, 1),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
     default_args=default_args,
     tags=["dwh", "load"],
 ) as dag:

@@ -16,7 +16,8 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
     max_active_runs=1,
-    default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
+    max_active_tasks=1,
+    default_args={"retries": 1, "retry_delay": timedelta(minutes=5), "pool": "heavy_pool"},
     tags=["transformation", "dbt", "core", "duckdb"],
 ) as dag:
 

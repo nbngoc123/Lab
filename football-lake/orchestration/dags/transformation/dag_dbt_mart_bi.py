@@ -15,6 +15,7 @@ default_args = {
     "owner": "airflow",
     "retries": 1,
     "retry_delay": timedelta(minutes=3),
+    "pool": "heavy_pool",
 }
 
 with DAG(
@@ -24,6 +25,7 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
     default_args=default_args,
     tags=["transformation", "dbt", "mart", "bi", "superset"],
 ) as dag:

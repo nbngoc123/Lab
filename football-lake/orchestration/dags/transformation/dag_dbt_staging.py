@@ -50,6 +50,8 @@ for source_name, in_asset, dbt_models in SOURCES:
         start_date=datetime(2023, 1, 1),
         catchup=False,
         max_active_runs=1,   # 1 nguồn không chạy chồng chính nó
+        max_active_tasks=1,
+        default_args={"pool": "heavy_pool"},
         tags=["transformation", "dbt", "staging", "duckdb", source_name],
     )
     
@@ -75,6 +77,8 @@ dag_p24 = DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
+    default_args={"pool": "heavy_pool"},
     tags=["transformation", "dbt", "staging", "duckdb", "p24_api_football"],
 )
 
@@ -98,6 +102,8 @@ dag_all = DAG(
     start_date=datetime(2023, 1, 1),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
+    default_args={"pool": "heavy_pool"},
     tags=["transformation", "dbt", "staging", "duckdb", "manual"],
 )
 

@@ -22,6 +22,7 @@ with DAG(
     schedule=timedelta(minutes=15),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
     default_args={"pool": "ingestion_pool", "retries": 1, "retry_delay": timedelta(minutes=1)},
     tags=["ingestion", "bronze", "cdc", "openliga"],
 ) as dag:
