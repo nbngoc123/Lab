@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 default_args = {"owner": "airflow", "retries": 1, "pool": "heavy_pool"}
 
 with DAG(
     dag_id="dag_load_dwh",
-    description="Load Parquet từ MinIO vào PostgreSQL schema dwh (Superset)",
+    description="Load Parquet từ MinIO vào PostgreSQL schema dwh (Superset) và kích hoạt ML Inference",
     schedule="0 3 * * *",     # chạy lúc 03:00 hàng ngày, sau dag_dbt_core (02:xx)
     start_date=datetime(2026, 10, 1),
     catchup=False,
@@ -33,3 +34,11 @@ with DAG(
         task_id="load_parquet_to_postgres",
         python_callable=_load,
     )
+
+    trigger_ml_inference = TriggerDagRunOperator(
+        task_id="trigger_ml_inference",
+        trigger_dag_id="dag_ml_inference",
+        wait_for_completion=False,
+    )
+
+    load_task >> trigger_ml_inference
