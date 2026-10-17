@@ -5,3 +5,8 @@ warehouse/model_cache/
 *.skops
 __pycache__/
 *.pyc
+postgres-data/
+minio-data/
+clickhouse-data/
+*.duckdb
+logs/
