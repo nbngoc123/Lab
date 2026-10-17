@@ -81,8 +81,14 @@ def load_table(con: duckdb.DuckDBPyConnection, table: str, parquet_path: str) ->
     """Load 1 bảng từ MinIO vào Postgres. Trả về số dòng đã ghi."""
     s3_path = f"s3://{BUCKET}/{parquet_path}"
     pg_table = f"pg.{PG_SCHEMA}.{table}"
-    con.execute(f"DROP TABLE IF EXISTS {pg_table};")
-    con.execute(f"CREATE TABLE {pg_table} AS SELECT * FROM read_parquet('{s3_path}');")
+    try:
+        # Nếu bảng đã tồn tại, dùng TRUNCATE + INSERT để không làm hỏng các VIEW phụ thuộc (Superset)
+        con.execute(f"TRUNCATE {pg_table};")
+        con.execute(f"INSERT INTO {pg_table} SELECT * FROM read_parquet('{s3_path}');")
+    except Exception:
+        # Nếu bảng chưa tồn tại, tạo mới
+        con.execute(f"DROP TABLE IF EXISTS {pg_table};")
+        con.execute(f"CREATE TABLE {pg_table} AS SELECT * FROM read_parquet('{s3_path}');")
     count = con.execute(f"SELECT COUNT(*) FROM {pg_table}").fetchone()[0]
     return count
 

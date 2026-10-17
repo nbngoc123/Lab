@@ -43,7 +43,7 @@ with DAG(
     # Staging KHÔNG được dựng lại ở đây: core đọc thẳng Parquet ở dwh/staging/ (do các DAG dbt_staging_* ghi).
     core = BashOperator(
         task_id="dbt_build_core",
-        bash_command="cd /opt/project/dbt && dbt build --select team_alias path:models/core --profiles-dir .",
+        bash_command="cd /opt/project/dbt && dbt build --select team_alias path:models/core --exclude tag:bi --profiles-dir .",
         env={"DBT_TARGET_PATH": "/tmp/dbt/dag_dbt_core/target", "DBT_LOG_PATH": "/tmp/dbt/dag_dbt_core/logs"},
         append_env=True,
         outlets=[dim_team, dim_player, fact_match],
