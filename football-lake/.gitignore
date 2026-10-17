@@ -1,2 +1,7 @@
 secrets/
 scratch/
+warehouse/model_cache/
+*.pkl
+*.skops
+__pycache__/
+*.pyc

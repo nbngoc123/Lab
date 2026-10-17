@@ -41,4 +41,10 @@ with DAG(
         wait_for_completion=False,
     )
 
-    load_task >> trigger_ml_inference
+    trigger_text_inference = TriggerDagRunOperator(
+        task_id="trigger_text_inference",
+        trigger_dag_id="dag_text_inference",
+        wait_for_completion=False,
+    )
+
+    load_task >> [trigger_ml_inference, trigger_text_inference]
