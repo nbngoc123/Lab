@@ -1,38 +1,102 @@
 import json
 import logging
 import urllib.request
+import urllib.parse
 from pathlib import Path
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Ánh xạ model ID trên MLflow để tải trực tiếp nếu MLflow client gặp sự cố chunk timeout
-MODEL_ID_MAP = {
-    "topic": "m-72eab58c8b704463935f1f736ad7a75b",
-    "sentiment": "m-d34db090a51941fb968bcf3e4c095a83",
-    "anomaly": "m-4b6bbde3bafd4933bf6b6806aa9c955e",
-}
-
 
 def _load_from_skops_file(file_path: Path):
+    """Nạp an toàn model scikit-learn từ file skops bằng trusted types."""
     import skops.io as sio
     untrusted = sio.get_untrusted_types(file=file_path)
     return sio.load(file_path, trusted=untrusted)
 
 
-def _download_model_artifact(tracking_uri: str, model_id: str, dest_path: Path, timeout: int = 15):
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
+def _resolve_model_download_url(tracking_uri: str, model_uri: str, timeout: int = 5) -> str:
+    """Phân giải 100% ĐỘNG URL tải model từ MLflow Model Registry hoặc Runs.
+    Tuyệt đối không hardcode ID hay đường dẫn.
+    Hỗ trợ:
+      - models:/<name>@<alias> (ví dụ models:/football-text-topic@champion)
+      - models:/<name>/<version>
+      - runs:/<run_id>/<artifact_path>
+    """
+    if not tracking_uri or not model_uri:
+        return ""
+        
     base = tracking_uri.rstrip("/")
-    url = f"{base}/api/2.0/mlflow-artifacts/artifacts/8/models/{model_id}/artifacts/model.skops"
-    logger.info("Đang tải model artifact trực tiếp từ: %s", url)
-    req = urllib.request.Request(url)
+
+    try:
+        # TH1: URI đăng ký trong Model Registry (models:/...)
+        if model_uri.startswith("models:/"):
+            target = model_uri.replace("models:/", "").strip("/")
+            source = ""
+            
+            if "@" in target:
+                model_name, alias = target.split("@", 1)
+                api_url = f"{base}/api/2.0/mlflow/registered-models/alias?name={urllib.parse.quote(model_name)}&alias={urllib.parse.quote(alias)}"
+                req = urllib.request.Request(api_url)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    source = data.get("model_version", {}).get("source", "")
+            elif "/" in target:
+                model_name, version = target.split("/", 1)
+                api_url = f"{base}/api/2.0/mlflow/model-versions/get?name={urllib.parse.quote(model_name)}&version={urllib.parse.quote(version)}"
+                req = urllib.request.Request(api_url)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    source = data.get("model_version", {}).get("source", "")
+            else:
+                api_url = f"{base}/api/2.0/mlflow/registered-models/get?name={urllib.parse.quote(target)}"
+                req = urllib.request.Request(api_url)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    versions = data.get("registered_model", {}).get("latest_versions", [])
+                    source = versions[0].get("source", "") if versions else ""
+
+            # Nếu source trỏ tới logged model models:/m-...
+            if source and "models/" in source:
+                m_id = source.split("models/")[-1]
+                lm_url = f"{base}/api/2.0/mlflow/logged-models/{m_id}"
+                req = urllib.request.Request(lm_url)
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    lm_data = json.loads(r.read().decode("utf-8"))
+                    art_uri = lm_data.get("model", {}).get("info", {}).get("artifact_uri", "")
+                    if art_uri:
+                        clean_path = art_uri.replace("mlflow-artifacts:/", "").strip("/")
+                        return f"{base}/api/2.0/mlflow-artifacts/artifacts/{clean_path}/model.skops"
+
+        # TH2: URI trực tiếp từ Run (runs:/<run_id>/<artifact_path>)
+        elif model_uri.startswith("runs:/"):
+            parts = model_uri.replace("runs:/", "").strip("/").split("/", 1)
+            run_id = parts[0]
+            artifact_path = parts[1] if len(parts) > 1 else ""
+            return f"{base}/get-artifact?path={artifact_path}/model.skops&run_uuid={run_id}"
+
+    except Exception as e:
+        logger.warning("Không thể phân giải động URL cho model URI '%s': %s", model_uri, e)
+
+    return ""
+
+
+def _download_and_cache_model(download_url: str, dest_path: Path, timeout: int = 20):
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.info("Đang tải model artifact động từ MLflow: %s", download_url)
+    req = urllib.request.Request(download_url)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         dest_path.write_bytes(resp.read())
     logger.info("✓ Đã lưu model vào cache: %s (%d bytes)", dest_path, dest_path.stat().st_size)
 
 
 def load_models(cfg):
-    """Nạp 3 model: topic, sentiment, anomaly. Ưu tiên Local Cache -> MLflow HTTP -> MLflow SDK."""
+    """Nạp 3 model: topic, sentiment, anomaly.
+    Quy trình phân giải ĐỘNG 100%:
+      1. Kiểm tra bộ đệm cục bộ (Local Cache) để chạy siêu tốc.
+      2. Nếu chưa có, truy vấn MLflow Server động theo URI (alias/version) để lấy URL tải artifact.
+      3. Fallback dùng mlflow.sklearn.load_model.
+    """
     cache_dir = Path(getattr(cfg, "cache_dir", "warehouse/model_cache/text"))
     cache_dir.mkdir(parents=True, exist_ok=True)
     
@@ -49,18 +113,20 @@ def load_models(cfg):
         if cached_file.exists():
             try:
                 model = _load_from_skops_file(cached_file)
-                logger.info("✓ Đã nạp %s model từ cache: %s", name, cached_file)
+                logger.info("✓ [Cache Hit] Đã nạp %s model từ: %s", name, cached_file)
             except Exception as e:
-                logger.warning("Lỗi khi đọc %s từ cache skops: %s", name, e)
+                logger.warning("Lỗi đọc cache skops %s: %s", name, e)
 
-        # 2. Nếu chưa có trong cache, tải trực tiếp qua HTTP từ MLflow Server
-        if model is None and cfg.tracking_uri and name in MODEL_ID_MAP:
-            try:
-                _download_model_artifact(cfg.tracking_uri, MODEL_ID_MAP[name], cached_file)
-                model = _load_from_skops_file(cached_file)
-                logger.info("✓ Đã tải và nạp thành công %s model từ MLflow server!", name)
-            except Exception as e:
-                logger.warning("Không tải được trực tiếp %s từ MLflow: %s", name, e)
+        # 2. Phân giải động qua MLflow REST API nếu chưa có cache
+        if model is None and cfg.tracking_uri and uri:
+            dl_url = _resolve_model_download_url(cfg.tracking_uri, uri)
+            if dl_url:
+                try:
+                    _download_and_cache_model(dl_url, cached_file)
+                    model = _load_from_skops_file(cached_file)
+                    logger.info("✓ [Dynamic Resolve] Tải & nạp thành công %s model từ MLflow!", name)
+                except Exception as de:
+                    logger.warning("Lỗi khi tải động %s: %s", name, de)
 
         # 3. Fallback dùng mlflow.sklearn.load_model nếu có URI
         if model is None and uri:
@@ -69,14 +135,14 @@ def load_models(cfg):
                 import mlflow.sklearn
                 mlflow.set_tracking_uri(cfg.tracking_uri)
                 model = mlflow.sklearn.load_model(uri)
-                logger.info("✓ Nạp thành công %s qua MLflow URI: %s", name, uri)
+                logger.info("✓ [MLflow SDK] Nạp thành công %s qua URI: %s", name, uri)
             except Exception as exc:
                 if required:
                     raise RuntimeError(f"Không thể nạp model {name} từ {uri}: {exc}") from exc
                 logger.warning("Bỏ qua anomaly model do không nạp được: %s", exc)
 
         if model is None and required:
-            raise RuntimeError(f"Thiếu model bắt buộc '{name}'! Vui lòng kiểm tra cache hoặc MLflow.")
+            raise RuntimeError(f"Thiếu model bắt buộc '{name}' ({uri})! Không thể tiếp tục.")
         
         out[name] = model
 
