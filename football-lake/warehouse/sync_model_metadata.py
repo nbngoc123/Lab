@@ -129,11 +129,14 @@ FEATURE_DESCRIPTIONS = {
 }
 
 
-def download_artifact(run_id: str, artifact_name: str) -> Optional[str]:
+def download_artifact(run_id: str, artifact_name: str, timeout: int = 4) -> Optional[str]:
     url = f"{MLFLOW_URI}/get-artifact?path={artifact_name}&run_uuid={run_id}"
     dest = CACHE_DIR / artifact_name
     try:
-        urllib.request.urlretrieve(url, dest)
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with open(dest, "wb") as f:
+                f.write(resp.read())
         logger.info("✓ Đã tải artifact '%s' từ MLflow", artifact_name)
         return str(dest)
     except Exception as e:
@@ -145,30 +148,35 @@ def sync_metadata():
     logger.info("Bắt đầu đồng bộ Model Metadata & Evaluation Metrics vào DWH...")
 
     # 1. Lấy thông tin Model Version từ MLflow Registry
-    version = "2"
-    run_id = "36fd2ed7440d423e8ab40a1144443d88"
+    version = os.getenv("MODEL_VERSION", "2")
+    run_id = os.getenv("MODEL_RUN_ID", "36fd2ed7440d423e8ab40a1144443d88")
+    server_reachable = False
     try:
         alias_url = f"{MLFLOW_URI}/api/2.0/mlflow/registered-models/alias?name={urllib.parse.quote(MODEL_NAME)}&alias={MODEL_ALIAS}"
-        with urllib.request.urlopen(alias_url, timeout=5) as resp:
+        with urllib.request.urlopen(alias_url, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             mv = data.get("model_version", {})
             if mv:
                 version = mv.get("version", version)
                 run_id = mv.get("run_id", run_id)
+                server_reachable = True
     except Exception as e:
         logger.warning("Truy vấn MLflow alias gặp lỗi (%s), dùng mặc định run_id=%s", e, run_id)
 
     model_version_label = f"LightGBM-v{version}"
 
-    # 2. Tải các artifacts phân tích từ MLflow Run
-    for art in [
-        "training_metadata.json",
-        "feature_importance.csv",
-        "classification_report_test.json",
-        "classification_report_validation.json",
-        "multiclass_metrics.csv",
-    ]:
-        download_artifact(run_id, art)
+    # 2. Tải các artifacts phân tích từ MLflow Run (chỉ tải khi MLflow phản hồi)
+    if server_reachable:
+        for art in [
+            "training_metadata.json",
+            "feature_importance.csv",
+            "classification_report_test.json",
+            "classification_report_validation.json",
+            "multiclass_metrics.csv",
+        ]:
+            download_artifact(run_id, art)
+    else:
+        logger.info("MLflow offline -> Tận dụng 100% cache artifacts sẵn có tại: %s", CACHE_DIR)
 
     # 3. Đọc dữ liệu từ artifacts
     train_meta = {}
