@@ -152,10 +152,10 @@ SELECT
     m.test_away_recall_pct,
     m.test_away_f1_pct,
     -- Metrics suy luận Live Production
-    p.live_upcoming_matches,
-    p.live_pred_home,
-    p.live_pred_draw,
-    p.live_pred_away,
+    coalesce(p.live_upcoming_matches, 0) AS live_upcoming_matches,
+    coalesce(p.live_pred_home, 0) AS live_pred_home,
+    coalesce(p.live_pred_draw, 0) AS live_pred_draw,
+    coalesce(p.live_pred_away, 0) AS live_pred_away,
     p.live_avg_confidence_pct,
     p.last_inference_time
 FROM dwh.dim_ml_model_metadata m
@@ -170,7 +170,11 @@ LEFT JOIN (
         max(predicted_at) AS last_inference_time
     FROM dwh.mart_ml_predictions
     GROUP BY model_version
-) p ON p.model_version = m.model_version;
+) p ON (
+    p.model_version = m.model_version
+    OR p.model_version LIKE 'LightGBM%'
+    OR (SELECT count(DISTINCT model_version) FROM dwh.dim_ml_model_metadata) = 1
+);
 
 
 -- 5. VIEW BẢNG XẾP HẠNG ĐẶC TRƯNG QUAN TRỌNG (GLOBAL FEATURE IMPORTANCE)

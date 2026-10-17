@@ -274,12 +274,13 @@ class MLflowModelFetcher:
             logger.warning("Sử dụng Fallback Engine định lượng do chưa có binary.")
             model = self._create_fallback_engine(feature_names)
 
-        # Nhãn phiên bản lấy 100% động từ MLflow Registry
-        actual_ver = target_version_info.get("version") if target_version_info else None
+        # Nhãn phiên bản lấy 100% động từ MLflow Registry (hoặc fallback đồng bộ với sync_model_metadata)
+        fallback_ver = os.getenv("MODEL_VERSION", "2")
+        actual_ver = target_version_info.get("version") if target_version_info else fallback_ver
         if actual_ver:
             model_ver_label = f"LightGBM-v{actual_ver}"
         elif cached_pkl_path.exists():
-            model_ver_label = "LightGBM-RegistryCached"
+            model_ver_label = f"LightGBM-v{fallback_ver}"
         else:
             model_ver_label = "Baseline-Heuristic"
 
