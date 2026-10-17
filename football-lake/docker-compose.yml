@@ -30,7 +30,6 @@ x-airflow-common:
   - ./orchestration/dags:/opt/airflow/dags
   - .:/opt/project
   - ./secrets:/opt/airflow/secrets:ro
-  - ./secrets:/opt/airflow/secrets:ro
   depends_on: &id004
     postgres:
       condition: service_healthy
