@@ -1,3 +1,4 @@
+import itertools
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -9,27 +10,34 @@ from common.assets import (
     stg_open_meteo, stg_wikidata, stg_thesportsdb
 )
 
-# Điều kiện kích hoạt: TẤT CẢ các nguồn Staging cốt lõi đều phải hoàn tất
-core_schedule = (
-    stg_football_data_co_uk
-    & stg_football_data_org
-    & stg_understat
-    & stg_openliga
-    & stg_api_football
-    & stg_open_meteo
-    & stg_wikidata
-    & stg_thesportsdb
-)
+# Danh sách 8 nguồn Staging cốt lõi
+core_assets = [
+    stg_football_data_co_uk,
+    stg_football_data_org,
+    stg_understat,
+    stg_openliga,
+    stg_api_football,
+    stg_open_meteo,
+    stg_wikidata,
+    stg_thesportsdb,
+]
+
+# Điều kiện kích hoạt: Chỉ cần từ 3 nguồn Staging bất kỳ trở lên cập nhật
+# (Tạo bằng tổ hợp C(8, 3) = 56 bộ 3 nối nhau bằng toán tử OR |)
+_triplets = [a & b & c for a, b, c in itertools.combinations(core_assets, 3)]
+core_schedule = _triplets[0]
+for _t in _triplets[1:]:
+    core_schedule |= _t
 
 # ==============================================================================
 # CORE (dbt - DuckDB): dim_team, dim_player, dim_venue, dim_competition, dim_date,
 #                      fact_match, fact_team_match, fact_player_season
-# Kích hoạt tự động khi toàn bộ các nguồn Staging phục vụ Core đã cập nhật xong.
+# Kích hoạt tự động khi có từ 3 nguồn Staging phục vụ Core đã cập nhật xong.
 # Core đọc thẳng Parquet staging từ MinIO nhờ register_upstream_external_models() ở on-run-start.
 # ==============================================================================
 with DAG(
     dag_id="dag_dbt_core",
-    description="Xây dựng Core DWH khi toàn bộ các nguồn Staging cốt lõi hoàn tất",
+    description="Xây dựng Core DWH khi có ít nhất 3 nguồn Staging cốt lõi cập nhật",
     schedule=core_schedule,
     start_date=datetime(2023, 1, 1),
     catchup=False,
