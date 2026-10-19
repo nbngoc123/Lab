@@ -6,3 +6,5 @@ ssh_config.txt
 
 secrets/
 scratch/
+*.docx
+*.pdf

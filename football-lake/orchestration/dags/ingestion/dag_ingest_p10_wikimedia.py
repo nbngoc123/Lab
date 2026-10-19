@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.decorators import task
 from airflow.sdk import Asset
+from common.assets import wikimedia
 
-asset_raw = Asset("minio://football-lake/raw/wikimedia")
+asset_raw = wikimedia
 
 with DAG(
     dag_id="dag_ingest_p10_wikimedia",
@@ -11,7 +12,7 @@ with DAG(
     schedule='@daily',
     catchup=False,
     max_active_runs=1,
-    default_args={"pool": "ingestion_pool"},
+    default_args={"pool": "ingestion_pool", "retries": 3, "retry_delay": timedelta(minutes=2)},
     max_active_tasks=2,
     tags=["ingestion", "bronze", "wikimedia"],
 ) as dag:

@@ -2,8 +2,9 @@ from datetime import datetime
 from airflow import DAG
 from airflow.decorators import task
 from airflow.sdk import Asset
+from common.assets import football_data_org
 
-asset_raw = Asset("minio://football-lake/raw/football_data")
+asset_raw = football_data_org
 
 with DAG(
     dag_id="dag_ingest_p09_football_data",
