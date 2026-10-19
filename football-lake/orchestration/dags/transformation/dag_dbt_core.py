@@ -43,7 +43,7 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     max_active_tasks=1,
-    default_args={"retries": 1, "retry_delay": timedelta(minutes=5), "pool": "heavy_pool"},
+    default_args={"retries": 1, "retry_delay": timedelta(minutes=5), "pool": "dbt_pool", "execution_timeout": timedelta(minutes=15)},
     tags=["transformation", "dbt", "core", "duckdb"],
 ) as dag:
 

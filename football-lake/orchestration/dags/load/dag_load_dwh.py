@@ -2,12 +2,12 @@
 Chạy sau khi dag_dbt_core hoàn tất.
 """
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-default_args = {"owner": "airflow", "retries": 1, "pool": "heavy_pool"}
+default_args = {"owner": "airflow", "retries": 1, "pool": "dwh_pool", "execution_timeout": timedelta(minutes=20)}
 
 with DAG(
     dag_id="dag_load_dwh",

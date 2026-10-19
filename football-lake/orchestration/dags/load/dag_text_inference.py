@@ -5,14 +5,15 @@ từ MLflow Server (qua Tailscale) hoặc Local Cache, thực hiện suy luận 
 tính toán xu hướng 7 ngày, cảnh báo bùng phát tiêu cực, và nạp 10 bảng vào PostgreSQL schema 'dwh'.
 """
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 default_args = {
     "owner": "airflow",
     "retries": 1,
-    "pool": "heavy_pool",
+    "pool": "ml_pool",
+    "execution_timeout": timedelta(minutes=15),
 }
 
 with DAG(

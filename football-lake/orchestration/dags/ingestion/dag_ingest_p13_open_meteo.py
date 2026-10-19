@@ -12,7 +12,7 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     max_active_tasks=1,
-    default_args={"pool": "heavy_pool"},
+    default_args={"pool": "ingestion_pool"},
     tags=["ingestion", "bronze", "open_meteo"],
 ) as dag:
 

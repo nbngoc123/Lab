@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
@@ -56,7 +56,7 @@ for source_name, in_asset, dbt_models, out_asset in SOURCES:
         catchup=False,
         max_active_runs=1,   # 1 nguồn không chạy chồng chính nó
         max_active_tasks=1,
-        default_args={"pool": "heavy_pool"},
+        default_args={"pool": "dbt_pool", "execution_timeout": timedelta(minutes=10)},
         tags=["transformation", "dbt", "staging", "duckdb", source_name],
     )
     
@@ -84,7 +84,7 @@ dag_p24 = DAG(
     catchup=False,
     max_active_runs=1,
     max_active_tasks=1,
-    default_args={"pool": "heavy_pool"},
+    default_args={"pool": "dbt_pool", "execution_timeout": timedelta(minutes=10)},
     tags=["transformation", "dbt", "staging", "duckdb", "p24_api_football"],
 )
 
@@ -110,7 +110,7 @@ dag_all = DAG(
     catchup=False,
     max_active_runs=1,
     max_active_tasks=1,
-    default_args={"pool": "heavy_pool"},
+    default_args={"pool": "dbt_pool", "execution_timeout": timedelta(minutes=20)},
     tags=["transformation", "dbt", "staging", "duckdb", "manual"],
 )
 

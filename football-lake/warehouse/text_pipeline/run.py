@@ -157,6 +157,15 @@ def execute(cfg: Settings):
     # 9. Ghi nhận Telemetry lên MLflow (Không làm fail pipeline nếu mạng timeout)
     if cfg.tracking_uri:
         try:
+            import urllib.request
+            # Fast check MLflow server connection trước khi gọi để tránh treo 12-15 phút do urllib3 retries
+            check_req = urllib.request.Request(f"{cfg.tracking_uri.rstrip('/')}/health")
+            with urllib.request.urlopen(check_req, timeout=3) as resp:
+                pass
+
+            os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] = "5"
+            os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = "1"
+
             import mlflow
             mlflow.set_tracking_uri(cfg.tracking_uri)
             experiment = os.getenv('FOOTBALL_INFERENCE_EXPERIMENT', 'Football_Text_Intelligence_360')

@@ -15,7 +15,8 @@ default_args = {
     "owner": "airflow",
     "retries": 1,
     "retry_delay": timedelta(minutes=3),
-    "pool": "heavy_pool",
+    "pool": "dbt_pool",
+    "execution_timeout": timedelta(minutes=10),
 }
 
 with DAG(

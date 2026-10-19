@@ -5,14 +5,15 @@ thực hiện suy luận kết quả trận đấu (1X2), tính toán SHAP Drive
 PostgreSQL DWH schema 'dwh' phục vụ demo trên Apache Superset.
 """
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 default_args = {
     "owner": "airflow",
-    "retries": 2,
-    "pool": "heavy_pool",
+    "retries": 1,
+    "pool": "ml_pool",
+    "execution_timeout": timedelta(minutes=15),
 }
 
 with DAG(
