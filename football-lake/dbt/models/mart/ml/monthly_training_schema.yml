@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: mart_ml_training_window
+    description: "Mốc chia dữ liệu dùng chung cho một snapshot huấn luyện theo tháng."
+    columns:
+      - name: window_id
+        tests: [not_null, unique]
+      - name: data_as_of
+        tests: [not_null]
+      - name: train_end
+        tests: [not_null]
+      - name: valid_end
+        tests: [not_null]
+
+  - name: mart_ml_training_snapshot
+    description: "Dữ liệu đã có nhãn, đủ lịch sử, giới hạn ngày chốt; Train mở rộng và Validation/Test dịch theo tháng."
+    columns:
+      - name: match_key
+        tests: [not_null, unique]
+      - name: split
+        tests:
+          - not_null
+          - accepted_values: {values: ['train', 'valid', 'test']}
+      - name: y_result_code
+        tests:
+          - not_null
+          - accepted_values: {values: [0, 1, 2], quote: false}
+      - name: training_window_id
+        tests: [not_null]
+      - name: training_label_known_ts
+        tests: [not_null]
