@@ -708,7 +708,7 @@ class DWHStorageSink:
             """)
             con.execute(f"CREATE SCHEMA IF NOT EXISTS pg.{PG_SCHEMA};")
 
-            # Ghi bảng dwh.mart_ml_predictions (dùng DELETE + INSERT để không làm hỏng các VIEW đang phụ thuộc)
+            # Ghi bảng dwh.mart_ml_predictions (DELETE + INSERT để giữ nguyên các VIEW phụ thuộc)
             con.execute(f"CREATE TABLE IF NOT EXISTS pg.{PG_SCHEMA}.mart_ml_predictions AS SELECT * FROM df_predictions WHERE 1=0;")
             con.execute(f"DELETE FROM pg.{PG_SCHEMA}.mart_ml_predictions;")
             con.execute(f"INSERT INTO pg.{PG_SCHEMA}.mart_ml_predictions SELECT * FROM df_predictions;")

@@ -472,6 +472,17 @@ def sync_metadata():
     );
     """)
 
+    # 4.5b View chỉ hiện model đang champion (mới nhất theo last_inference_time) cho Superset
+    cur.execute(f"DROP VIEW IF EXISTS {PG_SCHEMA}.v_model_performance_kpi_current CASCADE;")
+    cur.execute(f"""
+    CREATE OR REPLACE VIEW {PG_SCHEMA}.v_model_performance_kpi_current AS
+    SELECT kpi.*
+    FROM {PG_SCHEMA}.v_model_performance_kpi kpi
+    WHERE kpi.last_inference_time IS NOT NULL
+    ORDER BY kpi.last_inference_time DESC
+    LIMIT 1;
+    """)
+
     # 4.5 View Feature Importance cho Superset (Top 25 đặc trưng)
     cur.execute(f"DROP VIEW IF EXISTS {PG_SCHEMA}.v_model_feature_importance CASCADE;")
     cur.execute(f"""
