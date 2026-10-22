@@ -41,7 +41,7 @@ logging.basicConfig(
 logger = logging.getLogger("ml_inference")
 
 # ── CẤU HÌNH MẶC ĐỊNH ─────────────────────────────────────────────────────────
-DEFAULT_MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://100.116.34.36:8080")
+DEFAULT_MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://100.116.34.36:5000")
 DEFAULT_EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT_NAME", "Football_LightGBM_Tuning")
 CACHE_DIR = Path(os.getenv("MODEL_CACHE_DIR", "warehouse/model_cache"))
 
@@ -224,8 +224,8 @@ class MLflowModelFetcher:
                         logger.warning("Chưa đồng bộ được feature_names từ Run: %s", fe)
 
                     # Tải binary model động hoàn toàn từ artifact_uri của MLflow (hỗ trợ model.skops, model.pkl, model.txt)
-                    if "models/" in source:
-                        m_id = source.split("models/")[-1]
+                    if "models" in source:
+                        m_id = source.split("/")[-1].strip()
                         try:
                             lm_url = f"{self.tracking_uri}/api/2.0/mlflow/logged-models/{m_id}"
                             with urllib.request.urlopen(lm_url, timeout=5) as r:
