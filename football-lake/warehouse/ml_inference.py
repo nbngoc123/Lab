@@ -66,10 +66,145 @@ CLASS_NAMES = ["Away win", "Draw", "Home win"]
 RESULT_CODE_MAP = {0: "A", 1: "D", 2: "H"}
 RESULT_TEXT_MAP = {0: "Away Win", 1: "Draw", 2: "Home Win"}
 
-# Từ điển ánh xạ đặc trưng kỹ thuật sang mô tả trực quan dễ hiểu cho Superset
+# Từ điển ánh xạ đặc trưng kỹ thuật sang mô tả trực quan dễ hiểu cho Superset (107+ features)
 FEATURE_DESCRIPTIONS = {
-    "f_home_form5_points_rate": "Phong độ 5 trận gần nhất của Đội nhà",
-    "f_away_form5_points_rate": "Phong độ 5 trận gần nhất của Đội khách",
+    # 1. Các chỉ số trung bình cả mùa giải (Season stats)
+    "f_away_s_ga_pg": "Số bàn thua TB sân khách mùa này",
+    "f_away_s_gf_pg": "Số bàn thắng TB sân khách mùa này",
+    "f_home_s_ga_pg": "Số bàn thua TB sân nhà mùa này",
+    "f_home_s_gf_pg": "Số bàn thắng TB sân nhà mùa này",
+    "f_diff_s_ga_pg": "Chênh lệch bàn thua TB mùa này",
+    "f_diff_s_gf_pg": "Chênh lệch bàn thắng TB mùa này",
+    "f_diff_s_gd_pg": "Chênh lệch hiệu số bàn thắng bại TB",
+    "f_home_s_gd_pg": "Hiệu số bàn thắng bại TB sân nhà",
+    "f_away_s_gd_pg": "Hiệu số bàn thắng bại TB sân khách",
+    "f_home_s_ppg": "Điểm số trung bình sân nhà mùa này",
+    "f_away_s_ppg": "Điểm số trung bình sân khách",
+    "f_diff_s_ppg": "Chênh lệch điểm số TB giữa 2 đội",
+    "f_home_s_played": "Số trận đã đá mùa này của đội nhà",
+    "f_away_s_played": "Số trận đã đá mùa này của đội khách",
+    "f_diff_s_played": "Chênh lệch tổng số trận đã đá",
+
+    # 2. Số trận đã đấu & Thể lực ngày nghỉ
+    "f_home_n_prev": "Số trận đã đấu của đội nhà",
+    "f_away_n_prev": "Số trận đã đấu của đội khách",
+    "f_diff_n_prev": "Chênh lệch số trận đã đấu",
+    "f_home_rest_days": "Số ngày nghỉ của đội nhà",
+    "f_away_rest_days": "Số ngày nghỉ của đội khách",
+    "f_diff_rest_days": "Chênh lệch số ngày nghỉ giữa 2 đội",
+
+    # 3. Phong độ 20 trận gần nhất (Window L20 - Model v3)
+    "f_home_gd_l20": "Hiệu số bàn thắng đội nhà (20 trận)",
+    "f_away_gd_l20": "Hiệu số bàn thắng đội khách (20 trận)",
+    "f_diff_gd_l20": "Chênh lệch hiệu số bàn thắng (20 trận)",
+    "f_home_pts_l20": "Điểm số đội nhà (20 trận gần nhất)",
+    "f_away_pts_l20": "Điểm số đội khách (20 trận gần nhất)",
+    "f_diff_pts_l20": "Chênh lệch điểm số (20 trận gần nhất)",
+    "f_home_gf_l20": "Bàn thắng của đội nhà (20 trận gần nhất)",
+    "f_away_gf_l20": "Bàn thắng của đội khách (20 trận gần nhất)",
+    "f_diff_gf_l20": "Chênh lệch bàn thắng (20 trận gần nhất)",
+    "f_home_ga_l20": "Bàn thua của đội nhà (20 trận gần nhất)",
+    "f_away_ga_l20": "Bàn thua của đội khách (20 trận gần nhất)",
+    "f_diff_ga_l20": "Chênh lệch bàn thua (20 trận gần nhất)",
+
+    # 4. Lịch sử đối đầu trực tiếp (H2H - Model v3)
+    "f_h2h_n": "Số trận đối đầu trực tiếp trong lịch sử (H2H)",
+    "f_home_h2h_gf": "Bàn thắng đối đầu H2H (Đội nhà)",
+    "f_away_h2h_gf": "Bàn thắng đối đầu H2H (Đội khách)",
+    "f_diff_h2h_gf": "Chênh lệch bàn thắng đối đầu H2H",
+    "f_home_h2h_ga": "Bàn thua đối đầu H2H (Đội nhà)",
+    "f_away_h2h_ga": "Bàn thua đối đầu H2H (Đội khách)",
+    "f_diff_h2h_ga": "Chênh lệch bàn thua đối đầu H2H",
+    "f_home_h2h_pts": "Điểm số đối đầu H2H (Đội nhà)",
+    "f_away_h2h_pts": "Điểm số đối đầu H2H (Đội khách)",
+    "f_diff_h2h_pts": "Chênh lệch điểm đối đầu H2H",
+
+    # 5. Phong độ 10 trận gần nhất (Window L10)
+    "f_home_pts_l10": "Điểm số của đội nhà (10 trận gần nhất)",
+    "f_away_pts_l10": "Điểm số của đội khách (10 trận gần nhất)",
+    "f_diff_pts_l10": "Chênh lệch điểm số (10 trận gần nhất)",
+    "f_home_gf_l10": "Bàn thắng của đội nhà (10 trận gần nhất)",
+    "f_away_gf_l10": "Bàn thắng của đội khách (10 trận gần nhất)",
+    "f_diff_gf_l10": "Chênh lệch bàn thắng (10 trận gần nhất)",
+    "f_home_ga_l10": "Bàn thua của đội nhà (10 trận gần nhất)",
+    "f_away_ga_l10": "Bàn thua của đội khách (10 trận gần nhất)",
+    "f_diff_ga_l10": "Chênh lệch bàn thua (10 trận gần nhất)",
+    "f_home_win_rate_l10": "Tỷ lệ thắng của đội nhà (10 trận gần nhất)",
+    "f_away_win_rate_l10": "Tỷ lệ thắng của đội khách (10 trận gần nhất)",
+    "f_diff_win_rate_l10": "Chênh lệch tỷ lệ thắng (10 trận gần nhất)",
+
+    # 6. Phong độ 5 trận gần nhất (Window L5)
+    "f_home_pts_l5": "Điểm số của đội nhà (5 trận gần nhất)",
+    "f_away_pts_l5": "Điểm số của đội khách (5 trận gần nhất)",
+    "f_diff_pts_l5": "Chênh lệch điểm số (5 trận gần nhất)",
+    "f_home_gf_l5": "Bàn thắng của đội nhà (5 trận gần nhất)",
+    "f_away_gf_l5": "Bàn thắng của đội khách (5 trận gần nhất)",
+    "f_diff_gf_l5": "Chênh lệch bàn thắng (5 trận gần nhất)",
+    "f_home_ga_l5": "Bàn thua của đội nhà (5 trận gần nhất)",
+    "f_away_ga_l5": "Bàn thua của đội khách (5 trận gần nhất)",
+    "f_diff_ga_l5": "Chênh lệch bàn thua (5 trận gần nhất)",
+    "f_home_gd_l5": "Hiệu số bàn thắng đội nhà (5 trận gần nhất)",
+    "f_away_gd_l5": "Hiệu số bàn thắng đội khách (5 trận gần nhất)",
+    "f_diff_gd_l5": "Chênh lệch hiệu số bàn thắng (5 trận gần nhất)",
+    "f_home_win_rate_l5": "Tỷ lệ thắng của đội nhà (5 trận gần nhất)",
+    "f_away_win_rate_l5": "Tỷ lệ thắng của đội khách (5 trận gần nhất)",
+    "f_diff_win_rate_l5": "Chênh lệch tỷ lệ thắng (5 trận gần nhất)",
+    "f_home_cs_rate_l5": "Tỷ lệ giữ sạch lưới của đội nhà (5 trận)",
+    "f_away_cs_rate_l5": "Tỷ lệ giữ sạch lưới của đội khách (5 trận)",
+    "f_diff_cs_rate_l5": "Chênh lệch tỷ lệ sạch lưới (5 trận)",
+    "f_home_btts_rate_l5": "Tỷ lệ 2 đội cùng ghi bàn của đội nhà (5 trận)",
+    "f_away_btts_rate_l5": "Tỷ lệ 2 đội cùng ghi bàn của đội khách (5 trận)",
+    "f_diff_btts_rate_l5": "Chênh lệch tỷ lệ cả 2 đội cùng ghi bàn (5 trận)",
+    "f_home_over25_rate_l5": "Tỷ lệ tài 2.5 bàn của đội nhà (5 trận)",
+    "f_away_over25_rate_l5": "Tỷ lệ tài 2.5 bàn của đội khách (5 trận)",
+    "f_diff_over25_rate_l5": "Chênh lệch tỷ lệ tài 2.5 bàn (5 trận)",
+
+    # 7. Phong độ theo sân (Home/Away side 5 trận)
+    "f_home_side_pts_l5": "Điểm phong độ sân nhà (5 trận gần nhất)",
+    "f_away_side_pts_l5": "Điểm phong độ sân khách (5 trận gần nhất)",
+    "f_diff_side_pts_l5": "Chênh lệch điểm theo sân (5 trận)",
+    "f_home_side_gf_l5": "Bàn thắng sân nhà (5 trận gần nhất)",
+    "f_away_side_gf_l5": "Bàn thắng sân khách (5 trận gần nhất)",
+    "f_diff_side_gf_l5": "Chênh lệch bàn thắng theo sân (5 trận)",
+    "f_home_side_ga_l5": "Bàn thua sân nhà (5 trận gần nhất)",
+    "f_away_side_ga_l5": "Bàn thua sân khách (5 trận gần nhất)",
+    "f_diff_side_ga_l5": "Chênh lệch bàn thua theo sân (5 trận)",
+
+    # 8. Phong độ 3 trận gần nhất (Window L3)
+    "f_home_pts_l3": "Điểm số của đội nhà (3 trận gần nhất)",
+    "f_away_pts_l3": "Điểm số của đội khách (3 trận gần nhất)",
+    "f_diff_pts_l3": "Chênh lệch điểm số (3 trận gần nhất)",
+    "f_home_gf_l3": "Bàn thắng của đội nhà (3 trận gần nhất)",
+    "f_away_gf_l3": "Bàn thắng của đội khách (3 trận gần nhất)",
+    "f_diff_gf_l3": "Chênh lệch bàn thắng (3 trận gần nhất)",
+    "f_home_ga_l3": "Bàn thua của đội nhà (3 trận gần nhất)",
+    "f_away_ga_l3": "Bàn thua của đội khách (3 trận gần nhất)",
+    "f_diff_ga_l3": "Chênh lệch bàn thua (3 trận gần nhất)",
+
+    # 9. Mật độ thi đấu (Schedule density)
+    "f_home_n_7d": "Mật độ thi đấu dồn dập đội nhà (7 ngày)",
+    "f_away_n_7d": "Mật độ thi đấu dồn dập đội khách (7 ngày)",
+    "f_diff_n_7d": "Chênh lệch mật độ thi đấu dồn dập (7 ngày)",
+    "f_home_n_14d": "Mật độ thi đấu đội nhà (trong 14 ngày)",
+    "f_away_n_14d": "Mật độ thi đấu đội khách (trong 14 ngày)",
+    "f_diff_n_14d": "Chênh lệch mật độ thi đấu (14 ngày)",
+    "f_home_n_30d": "Mật độ thi đấu đội nhà (trong 30 ngày)",
+    "f_away_n_30d": "Mật độ thi đấu đội khách (trong 30 ngày)",
+    "f_diff_n_30d": "Chênh lệch mật độ thi đấu (30 ngày)",
+
+    # 10. Trọng tài & Lịch thi đấu & Giải đấu
+    "f_ref_n_prev": "Số trận trọng tài đã bắt trước đó",
+    "f_dow": "Ngày trong tuần (Thứ Hai - Chủ Nhật)",
+    "f_month": "Tháng thi đấu trong năm",
+    "f_is_weekend": "Trận đấu diễn ra cuối tuần (Thứ 7 / CN)",
+    "f_kickoff_hour_utc": "Khung giờ thi đấu (Giờ UTC)",
+    "f_comp_tier": "Phân hạng giải đấu (Competition Tier)",
+    "f_home_form5_points_rate": "Tỷ lệ điểm phong độ 5 trận của đội nhà",
+    "f_away_form5_points_rate": "Tỷ lệ điểm phong độ 5 trận của đội khách",
+    "f_home_points_rate": "Tỷ lệ điểm phong độ 5 trận gần nhất (Home)",
+    "f_away_points_rate": "Tỷ lệ điểm phong độ 5 trận gần nhất (Away)",
+
+    # 11. Các đặc trưng nâng cao (xG, Odds, Sân bãi)
     "f_diff_points_rate": "Chênh lệch điểm số phong độ (Nhà - Khách)",
     "f_diff_points_roll5": "Chênh lệch điểm số tích lũy 5 trận",
     "f_home_points_roll5": "Điểm số Đội nhà 5 trận gần nhất",
@@ -89,19 +224,67 @@ FEATURE_DESCRIPTIONS = {
     "f_diff_ppda_roll5": "Chênh lệch cường độ áp sát gây áp lực (PPDA)",
     "f_home_ppda_roll5": "Chỉ số áp sát pressing của Đội nhà",
     "f_away_ppda_roll5": "Chỉ số áp sát pressing của Đội khách",
-    "f_diff_rest_days": "Lợi thế thể lực (Chênh lệch ngày nghỉ)",
-    "f_home_rest_days": "Số ngày nghỉ hồi phục của Đội nhà",
-    "f_away_rest_days": "Số ngày nghỉ hồi phục của Đội khách",
     "f_mkt_p_home": "Xác suất thị trường cược Đội nhà thắng",
     "f_mkt_p_draw": "Xác suất thị trường cược kết quả Hòa",
     "f_mkt_p_away": "Xác suất thị trường cược Đội khách thắng",
     "f_home_stadium_capacity": "Quy mô sân nhà & áp lực khán giả",
     "f_ref_avg_cards": "Mức độ nghiêm khắc của trọng tài (thẻ/trận)",
     "f_ref_avg_fouls": "Tỷ lệ thổi phạt lỗi của trọng tài",
-    "f_h2h_n": "Lịch sử đối đầu trực tiếp giữa 2 đội",
     "f_weather_temp_c": "Nhiệt độ thời tiết thi đấu",
     "f_weather_precip_mm": "Lượng mưa thời tiết",
 }
+
+
+def get_feature_label(feat: str) -> str:
+    """Trả về nhãn mô tả tiếng Việt của feature, tự động chuẩn hóa fallback nếu chưa có trong từ điển."""
+    if feat in FEATURE_DESCRIPTIONS:
+        return FEATURE_DESCRIPTIONS[feat]
+
+    name = feat
+    prefix = ""
+    if name.startswith("f_diff_"):
+        prefix = "Chênh lệch "
+        name = name[7:]
+    elif name.startswith("f_home_"):
+        prefix = "Đội nhà - "
+        name = name[7:]
+    elif name.startswith("f_away_"):
+        prefix = "Đội khách - "
+        name = name[7:]
+    elif name.startswith("f_"):
+        name = name[2:]
+
+    suffix = ""
+    for w in ["_l20", "_l10", "_l5", "_l3"]:
+        if name.endswith(w):
+            suffix = f" ({w[2:]} trận gần nhất)"
+            name = name[:-len(w)]
+            break
+
+    metric_map = {
+        "gd": "hiệu số bàn thắng",
+        "gf": "bàn thắng",
+        "ga": "bàn thua",
+        "pts": "điểm số",
+        "win_rate": "tỷ lệ thắng",
+        "cs_rate": "tỷ lệ sạch lưới",
+        "btts_rate": "tỷ lệ 2 đội cùng ghi bàn",
+        "over25_rate": "tỷ lệ tài 2.5 bàn",
+        "side_gf": "bàn thắng theo sân",
+        "side_ga": "bàn thua theo sân",
+        "side_pts": "điểm số theo sân",
+        "h2h_gf": "bàn thắng đối đầu H2H",
+        "h2h_ga": "bàn thua đối đầu H2H",
+        "h2h_pts": "điểm đối đầu H2H",
+        "s_ppg": "điểm số TB mùa",
+        "s_gf_pg": "bàn thắng TB mùa",
+        "s_ga_pg": "bàn thua TB mùa",
+        "s_gd_pg": "hiệu số bàn thắng TB mùa",
+        "s_played": "tổng số trận đã đấu",
+    }
+
+    body = metric_map.get(name, name.replace("_", " "))
+    return f"{prefix}{body}{suffix}".strip()
 
 
 def form_to_points(form: Any) -> float:
@@ -561,7 +744,7 @@ class InferenceEngine:
                 feat = self.feature_names[s_idx]
                 val = float(sample_shap[s_idx])
                 raw_val = float(X.iloc[i][feat]) if pd.notna(X.iloc[i][feat]) else None
-                label = FEATURE_DESCRIPTIONS.get(feat, feat)
+                label = get_feature_label(feat)
                 shap_records.append({
                     "match_key": match_key,
                     "feature_name": feat,
@@ -647,7 +830,7 @@ class InferenceEngine:
             idx = indices[pos]
             feat = self.feature_names[idx]
             impact = round(float(shap_arr[idx]), 4)
-            label = FEATURE_DESCRIPTIONS.get(feat, feat)
+            label = get_feature_label(feat)
             raw_v = row.get(feat)
             if pd.notna(raw_v):
                 try:
