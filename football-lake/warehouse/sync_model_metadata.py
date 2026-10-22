@@ -16,7 +16,7 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("sync_model_metadata")
 
-MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://100.116.34.36:8080")
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://100.116.34.36:5000")
 MODEL_NAME = "football_match_predictor"
 MODEL_ALIAS = "champion"
 
@@ -197,6 +197,15 @@ def sync_metadata():
         with open(report_val_file, "r", encoding="utf-8") as f:
             report_val = json.load(f)
 
+    multi_metrics = {}
+    multi_metrics_file = CACHE_DIR / "multiclass_metrics.csv"
+    if multi_metrics_file.exists():
+        try:
+            df_mm = pd.read_csv(multi_metrics_file, index_col=0)
+            multi_metrics = df_mm.to_dict()
+        except Exception as e:
+            logger.warning("Lỗi đọc multiclass_metrics.csv: %s", e)
+
     # 4. Kết nối PostgreSQL
     conn = psycopg2.connect(
         host=PG_HOST, port=PG_PORT, dbname=PG_DB, user=PG_USER, password=PG_PASS
@@ -264,6 +273,19 @@ def sync_metadata():
     dr_test = report_test.get("Draw", {})
     aw_test = report_test.get("Away win", {})
 
+    mw = train_meta.get("monthly_window", {})
+    split_method_val = train_meta.get("split_method") or mw.get("split_policy", "monthly_v1")
+    train_range_val = f"2020-08-29 -> {train_meta.get('train_end', '2026-03-31')}"
+    valid_range_val = f"{mw.get('valid_start', '2026-04-01')} -> {mw.get('valid_end', '2026-06-30')}"
+    test_range_val = f"{mw.get('test_start', '2026-07-01')} -> {mw.get('data_as_of', '2026-09-30')}"
+
+    test_b_acc = float(multi_metrics.get("test", {}).get("balanced_accuracy", 0.4235)) * 100
+    valid_b_acc = float(multi_metrics.get("validation", {}).get("balanced_accuracy", 0.4274)) * 100
+    test_loss = float(multi_metrics.get("test", {}).get("log_loss", 1.0224))
+    valid_loss = float(multi_metrics.get("validation", {}).get("log_loss", 1.0456))
+    test_mcc_val = float(multi_metrics.get("test", {}).get("mcc", 0.1581))
+    valid_mcc_val = float(multi_metrics.get("validation", {}).get("mcc", 0.1581))
+
     cur.execute(f"DELETE FROM {PG_SCHEMA}.dim_ml_model_metadata WHERE model_version = %s;", (model_version_label,))
     cur.execute(f"""
     INSERT INTO {PG_SCHEMA}.dim_ml_model_metadata (
@@ -304,25 +326,25 @@ def sync_metadata():
     """, (
         model_version_label, MODEL_NAME, run_id, "5", "Football_LightGBM_Tuning",
         "LightGBM Classifier", "multiclass (num_class=3: Away, Draw, Home)", "football-lake Lakehouse Parquet",
-        train_meta.get("n_raw", 33668), train_meta.get("n_after_filter", 24320),
-        train_meta.get("n_train", 14809), train_meta.get("n_validation", 4627), train_meta.get("n_test", 4884),
-        train_meta.get("n_features", 92), "calendar_date_cutoff (Temporal Split)",
-        "2020-08-29 -> 2024-06-30", "2024-07-01 -> 2025-06-27", "2025-07-01 -> 2026-10-14",
+        train_meta.get("n_raw", 16857), train_meta.get("n_after_filter", 16857),
+        train_meta.get("n_train", 15882), train_meta.get("n_validation", 566), train_meta.get("n_test", 409),
+        train_meta.get("n_features", 107), split_method_val,
+        train_range_val, valid_range_val, test_range_val,
         "y_result_code (0: Away, 1: Draw, 2: Home)",
         0.03, 500, 15, 40, 1.0, 0.85, 0.85,
         train_meta.get("draw_weight", 1.5), 57.1,
-        round(report_test.get("accuracy", 0.4621) * 100, 2),
-        round(report_val.get("accuracy", 0.4709) * 100, 2),
-        42.08, 42.65,
-        round(report_test.get("macro avg", {}).get("f1-score", 0.4181) * 100, 2),
-        round(report_val.get("macro avg", {}).get("f1-score", 0.4241) * 100, 2),
-        round(report_test.get("weighted avg", {}).get("f1-score", 0.4503) * 100, 2),
-        round(report_val.get("weighted avg", {}).get("f1-score", 0.4585) * 100, 2),
-        1.0468, 1.0343,
-        0.1547, 0.1654,
-        round(hw_test.get("precision", 0.5387) * 100, 2), round(hw_test.get("recall", 0.6645) * 100, 2), round(hw_test.get("f1-score", 0.5950) * 100, 2),
-        round(dr_test.get("precision", 0.2713) * 100, 2), round(dr_test.get("recall", 0.2393) * 100, 2), round(dr_test.get("f1-score", 0.2543) * 100, 2),
-        round(aw_test.get("precision", 0.4648) * 100, 2), round(aw_test.get("recall", 0.3588) * 100, 2), round(aw_test.get("f1-score", 0.4050) * 100, 2),
+        round(report_test.get("accuracy", 0.4597) * 100, 2),
+        round(report_val.get("accuracy", 0.4558) * 100, 2),
+        round(test_b_acc, 2), round(valid_b_acc, 2),
+        round(report_test.get("macro avg", {}).get("f1-score", 0.4198) * 100, 2),
+        round(report_val.get("macro avg", {}).get("f1-score", 0.4167) * 100, 2),
+        round(report_test.get("weighted avg", {}).get("f1-score", 0.4455) * 100, 2),
+        round(report_val.get("weighted avg", {}).get("f1-score", 0.4361) * 100, 2),
+        round(test_loss, 4), round(valid_loss, 4),
+        round(test_mcc_val, 4), round(valid_mcc_val, 4),
+        round(hw_test.get("precision", 0.5065) * 100, 2), round(hw_test.get("recall", 0.6842) * 100, 2), round(hw_test.get("f1-score", 0.5821) * 100, 2),
+        round(dr_test.get("precision", 0.2737) * 100, 2), round(dr_test.get("recall", 0.2453) * 100, 2), round(dr_test.get("f1-score", 0.2587) * 100, 2),
+        round(aw_test.get("precision", 0.5422) * 100, 2), round(aw_test.get("recall", 0.3409) * 100, 2), round(aw_test.get("f1-score", 0.4186) * 100, 2),
     ))
     logger.info("✓ Đã nạp thành công bảng %s.dim_ml_model_metadata", PG_SCHEMA)
 
