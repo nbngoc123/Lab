@@ -33,6 +33,8 @@ vars:
   ml_min_history: 5          # is_warm: cả 2 đội cần >= N trận trước đó
   ml_train_until_date: '2024-06-30' # Chia theo ngày chốt cố định (tránh xé lẻ vòng đấu cùng ngày)
   ml_valid_until_date: '2025-06-30'
+  ml_training_valid_months: 3
+  ml_training_test_months: 3
   non_team_keys: "('unknown','Bundesliga','La Liga','Ligue 1','Premier League','Serie A','Champions League','European Championship','FIFA World Cup')"
 
 seeds:

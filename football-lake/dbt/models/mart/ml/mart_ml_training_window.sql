@@ -7,8 +7,8 @@ with parameters as (
     select
         timestamp '{{ run_started_at.strftime("%Y-%m-%d %H:%M:%S") }}' as generated_at,
         cast(nullif('{{ var("ml_training_as_of_date", "") }}', '') as date) as requested_as_of,
-        cast('{{ var("ml_training_valid_months", 1) }}' as integer) as valid_months,
-        cast('{{ var("ml_training_test_months", 1) }}' as integer) as test_months
+        cast('{{ var("ml_training_valid_months", 3) }}' as integer) as valid_months,
+        cast('{{ var("ml_training_test_months", 3) }}' as integer) as test_months
 ),
 cutoff as (
     select *, coalesce(
