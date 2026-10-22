@@ -189,6 +189,7 @@ class MLflowModelFetcher:
         4. Tự động cache cục bộ để phục vụ offline / fallback an toàn nếu mất mạng.
         """
         cached_pkl_path = self.cache_dir / "model.pkl"
+        cached_skops_path = self.cache_dir / "model.skops"
         cached_model_path = self.cache_dir / "lightgbm_model.txt"
         cached_features_path = self.cache_dir / "feature_names.json"
 
@@ -211,7 +212,7 @@ class MLflowModelFetcher:
                     source = target_version_info.get("source", "")
                     logger.info("✓ MLflow Registry: Model '%s' [@%s] -> Version %s (Run: %s)", self.registered_model_name, self.model_alias, version, run_id)
 
-                    # Đồng bộ 92 features từ Run tương ứng
+                    # Đồng bộ danh sách features từ Run tương ứng
                     try:
                         feat_url = f"{self.tracking_uri}/get-artifact?path=feature_names.json&run_uuid={run_id}"
                         with urllib.request.urlopen(feat_url, timeout=5) as r:
@@ -222,25 +223,37 @@ class MLflowModelFetcher:
                     except Exception as fe:
                         logger.warning("Chưa đồng bộ được feature_names từ Run: %s", fe)
 
-                    # Tải binary model.pkl động hoàn toàn từ artifact_uri của MLflow
+                    # Tải binary model động hoàn toàn từ artifact_uri của MLflow (hỗ trợ model.skops, model.pkl, model.txt)
                     if "models/" in source:
                         m_id = source.split("models/")[-1]
                         try:
-                            # Lấy artifact_uri chuẩn từ MLflow Server (không đoán mò experiment_id)
                             lm_url = f"{self.tracking_uri}/api/2.0/mlflow/logged-models/{m_id}"
                             with urllib.request.urlopen(lm_url, timeout=5) as r:
                                 lm_data = json.loads(r.read().decode("utf-8"))
                                 art_uri = lm_data.get("model", {}).get("info", {}).get("artifact_uri", "")
 
                             if art_uri:
-                                # Chuyển artifact_uri dạng 'mlflow-artifacts:/<exp>/models/<m_id>/artifacts' thành URL tải
                                 clean_path = art_uri.replace("mlflow-artifacts:/", "").strip("/")
-                                model_download_url = f"{self.tracking_uri}/api/2.0/mlflow-artifacts/artifacts/{clean_path}/model.pkl"
-                                urllib.request.urlretrieve(model_download_url, cached_pkl_path)
-                                logger.info("✓ Tự động tải thành công model.pkl Version %s (%d bytes) từ MLflow!", version, cached_pkl_path.stat().st_size)
-                                synced_from_mlflow = True
+                                for candidate_name, candidate_dest in [
+                                    ("model.skops", cached_skops_path),
+                                    ("model.pkl", cached_pkl_path),
+                                    ("lightgbm_model.txt", cached_model_path),
+                                ]:
+                                    try:
+                                        dl_url = f"{self.tracking_uri}/api/2.0/mlflow-artifacts/artifacts/{clean_path}/{candidate_name}"
+                                        urllib.request.urlretrieve(dl_url, candidate_dest)
+                                        logger.info("✓ Tự động tải thành công %s Version %s (%d bytes) từ MLflow!", candidate_name, version, candidate_dest.stat().st_size)
+                                        # Xoá format cũ khác để tránh xung đột phiên bản
+                                        if candidate_name == "model.skops" and cached_pkl_path.exists():
+                                            cached_pkl_path.unlink()
+                                        elif candidate_name == "model.pkl" and cached_skops_path.exists():
+                                            cached_skops_path.unlink()
+                                        synced_from_mlflow = True
+                                        break
+                                    except Exception:
+                                        continue
                         except Exception as me:
-                            logger.warning("Lỗi khi tải model.pkl động: %s", me)
+                            logger.warning("Lỗi khi tải model binary động: %s", me)
             except Exception as e:
                 logger.warning("Không truy vấn được MLflow Model Registry: %s", e)
 
@@ -251,14 +264,23 @@ class MLflowModelFetcher:
         else:
             feature_names = []
 
-        # 3. Nạp Model thật (Ưu tiên model.pkl -> text model -> Fallback)
+        # 3. Nạp Model thật (Ưu tiên model.skops -> model.pkl -> text model -> Fallback)
         model = None
-        if cached_pkl_path.exists():
+        if cached_skops_path.exists():
+            try:
+                import skops.io as sio
+                untrusted = sio.get_untrusted_types(file=str(cached_skops_path))
+                model = sio.load(str(cached_skops_path), trusted=untrusted)
+                logger.info("✓ ĐÃ NẠP THÀNH CÔNG MODEL LIGHTGBM THẬT (LGBMClassifier skops) từ cache: %s (Features: %s)", cached_skops_path, getattr(model, "n_features_", "N/A"))
+            except Exception as e:
+                logger.warning("Lỗi nạp model.skops: %s", e)
+
+        if model is None and cached_pkl_path.exists():
             try:
                 import pickle
                 with open(cached_pkl_path, "rb") as f:
                     model = pickle.load(f)
-                logger.info("✓ ĐÃ NẠP THÀNH CÔNG MODEL LIGHTGBM THẬT (LGBMClassifier) từ cache: %s", cached_pkl_path)
+                logger.info("✓ ĐÃ NẠP THÀNH CÔNG MODEL LIGHTGBM THẬT (LGBMClassifier pickle) từ cache: %s", cached_pkl_path)
             except Exception as e:
                 logger.warning("Lỗi unpickle model.pkl: %s", e)
 
